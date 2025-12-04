@@ -63,6 +63,12 @@ useEffect(() => {
     }
 }, [paths, currentPath, spellText]);
 
+    useEffect(() => {
+        if (visible && canvasRef.current) {
+            canvasRef.current.focus();
+        }
+    }, [visible]);
+
 const getOffset = (element, x, y) => {
     const rect = element.getBoundingClientRect();
     return { x: x - rect.left, y: y - rect.top };
@@ -131,6 +137,7 @@ return (
     >
         <canvas
             ref={canvasRef}
+            tabIndex={0}
             width={650}
             height={400}
             onPointerDown={handlePointerDown}
@@ -147,7 +154,7 @@ return (
             }}
         />
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-            <Button label={useFinger ? "Finger Mode ON" : "Finger Mode OFF"} icon="pi pi-exchange" className="p-button-warning" onClick={() => setUseFinger(!useFinger)} />
+            <Button label={useFinger ? "Fingers allowed" : "Only stylus"} icon="pi pi-exchange" className="p-button-warning" onClick={() => setUseFinger(!useFinger)} />
             <Button label="Finish Spell" icon="pi pi-check" className="p-button-success" onClick={calculateAccuracy} />
             <Button label="Close" icon="pi pi-times" className="p-button-secondary" onClick={onClose} />
         </div>
