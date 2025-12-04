@@ -10,16 +10,18 @@ const SpellGameModal = ({ spellText, visible, onClose }) => {
     const [drawing, setDrawing] = useState(false);
     const [paths, setPaths] = useState([]);
     const [currentPath, setCurrentPath] = useState([]);
+    const [useFinger, setUseFinger] = useState(false); // false = stylus only
 
     
+const lineSpacing = 30;
+
 useEffect(() => {
     if (!canvasRef.current) return;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw notebook lines
-    const lineSpacing = 30;
+    // Notebook lines
     ctx.strokeStyle = "rgba(0,0,0,0.15)";
     ctx.lineWidth = 1;
     for (let i = 1; i < canvas.height / lineSpacing; i++) {
@@ -29,13 +31,13 @@ useEffect(() => {
         ctx.stroke();
     }
 
-    // Draw spell text semi-transparent
+    // Spell text at top-left
     ctx.font = "bold 32px cursive";
     ctx.fillStyle = "rgba(0,0,0,0.25)";
-    ctx.textBaseline = "middle";
-    ctx.fillText(spellText, 50, canvas.height / 2);
+    ctx.textBaseline = "top";
+    ctx.fillText(spellText, 10, 10);
 
-    // Draw user paths
+    // Draw saved paths
     ctx.strokeStyle = "#007ad9";
     ctx.lineWidth = 4;
     ctx.lineJoin = "round";
@@ -66,43 +68,22 @@ const getOffset = (element, x, y) => {
     return { x: x - rect.left, y: y - rect.top };
 };
 
-const handleMouseDown = (e) => {
+const handlePointerDown = (e) => {
+    if (!useFinger && e.pointerType !== "pen") return; // stylus only by default
     setDrawing(true);
     const pos = getOffset(e.target, e.clientX, e.clientY);
     setCurrentPath([{ x: pos.x, y: pos.y }]);
 };
 
-const handleMouseMove = (e) => {
+const handlePointerMove = (e) => {
     if (!drawing) return;
+    if (!useFinger && e.pointerType !== "pen") return;
     const pos = getOffset(e.target, e.clientX, e.clientY);
     setCurrentPath(prev => [...prev, { x: pos.x, y: pos.y }]);
 };
 
-const handleMouseUp = () => {
-    setDrawing(false);
-    setPaths(prev => [...prev, currentPath]);
-    setCurrentPath([]);
-};
-
-// Touch support
-const handleTouchStart = (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    const pos = getOffset(e.target, touch.clientX, touch.clientY);
-    setDrawing(true);
-    setCurrentPath([{ x: pos.x, y: pos.y }]);
-};
-
-const handleTouchMove = (e) => {
-    e.preventDefault();
+const handlePointerUp = () => {
     if (!drawing) return;
-    const touch = e.touches[0];
-    const pos = getOffset(e.target, touch.clientX, touch.clientY);
-    setCurrentPath(prev => [...prev, { x: pos.x, y: pos.y }]);
-};
-
-const handleTouchEnd = (e) => {
-    e.preventDefault();
     setDrawing(false);
     setPaths(prev => [...prev, currentPath]);
     setCurrentPath([]);
@@ -110,7 +91,6 @@ const handleTouchEnd = (e) => {
 
 const calculateAccuracy = () => {
     if (!canvasRef.current) return;
-
     const canvas = canvasRef.current;
     const offCanvas = document.createElement("canvas");
     offCanvas.width = canvas.width;
@@ -119,8 +99,8 @@ const calculateAccuracy = () => {
 
     offCtx.font = "32px cursive";
     offCtx.fillStyle = "black";
-    offCtx.textBaseline = "middle";
-    offCtx.fillText(spellText, 50, canvas.height / 2);
+    offCtx.textBaseline = "top";
+    offCtx.fillText(spellText, 10, 10);
 
     const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height).data;
 
@@ -131,9 +111,7 @@ const calculateAccuracy = () => {
         path.forEach(p => {
             totalPoints++;
             const index = (Math.floor(p.y) * offCanvas.width + Math.floor(p.x)) * 4;
-            if (imageData[index + 3] > 0) {
-                pointsOnText++;
-            }
+            if (imageData[index + 3] > 0) pointsOnText++;
         });
     });
 
@@ -155,23 +133,21 @@ return (
             ref={canvasRef}
             width={650}
             height={400}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerLeave={handlePointerUp}
             style={{
                 border: "2px solid #007ad9",
                 borderRadius: "8px",
                 cursor: "crosshair",
                 marginBottom: "1rem",
                 background: "#fff8e7",
-                touchAction: "none" // important for mobile
+                touchAction: "none"
             }}
         />
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+            <Button label={useFinger ? "Finger Mode ON" : "Finger Mode OFF"} icon="pi pi-exchange" className="p-button-warning" onClick={() => setUseFinger(!useFinger)} />
             <Button label="Finish Spell" icon="pi pi-check" className="p-button-success" onClick={calculateAccuracy} />
             <Button label="Close" icon="pi pi-times" className="p-button-secondary" onClick={onClose} />
         </div>
