@@ -372,202 +372,90 @@ export default function LearningTable() {
         <div className="card p-fluid" style={{ padding: 20 }}>
             <Toast ref={toast} />
             <ContextMenu model={menuModel} ref={cm} />
-            <div
-                className="flex flex-col gap-4 w-full p-4 bg-gray-50 rounded-2xl shadow-md border border-gray-200"
-            >
-                {/* Top Section: Content Creation */}
-                <div className="p-4 bg-white rounded-xl shadow-sm border border-gray-100">
-                    <h2 className="text-lg font-semibold mb-3 text-gray-800">Add Content Item</h2>
+            <div className="flex flex-col gap-4 w-full p-4 bg-gray-50 rounded-2xl shadow-md border border-gray-200">
+                {[
+                    {
+                        title: "Add Content Item",
+                        label: labelToAdd,
+                        setLabel: setLabelToAdd,
+                        inputs: [
+                            { val: content, set: setContent, ph: "Content" },
+                            { val: explanation, set: setExplanation, ph: "Explanation" }
+                        ],
+                        btnText: "Add Content Item",
+                        action: addContentRow
+                    },
+                    {
+                        title: "Add AI Request",
+                        label: labelForRequest,
+                        setLabel: setLabelForRequest,
+                        inputs: [
+                            { val: requestQuery, set: setRequestQuery, ph: "Request query" }
+                        ],
+                        btnText: "Add AI Request",
+                        action: addRequestRow
+                    }
+                ].map((section, idx) => {
+                    const activeColor = LABELS.find(l => l.value === section.label)?.color;
 
-                    <div className="flex flex-wrap gap-3 items-center">
+                    return (
+                        <div key={idx} className="p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                            <h2 className="text-lg font-semibold mb-3 text-gray-800">{section.title}</h2>
+                            <div className="flex flex-wrap gap-3 items-center">
+                                <div className="min-w-[10rem]">
+                                    <SelectButton
+                                        value={section.label}
+                                        onChange={(e) => section.setLabel(e.value)}
+                                        options={LABELS}
+                                        optionLabel="label"
+                                        optionValue="value"
+                                        className="w-full"
+                                        pt={{
+                                            button: ({ context }) => ({
+                                                style: {
+                                                    background: context.selected ? activeColor : "#f5f5f5",
+                                                    borderColor: context.selected ? activeColor : "#ccc",
+                                                    color: context.selected ? "#fff" : "#444",
+                                                    transition: "0.2s",
+                                                    fontWeight: context.selected ? "600" : "500"
+                                                }
+                                            })
+                                        }}
+                                    />
+                                </div>
 
-                        {/* Label Selector */}
-                        <div className="min-w-[10rem]">
-                            <SelectButton
-                                value={labelToAdd}
-                                onChange={(e) => setLabelToAdd(e.value)}
-                                options={LABELS}
-                                optionLabel="label"
-                                optionValue="value"
-                                className="w-full"
-                                pt={{
-                                    button: ({ context }) => ({
-                                        style: {
-                                            background:
-                                                context.selected
-                                                    ? LABELS.find(x => x.value === labelToAdd)?.color
-                                                    : "#f5f5f5",
-                                            borderColor:
-                                                context.selected
-                                                    ? LABELS.find(x => x.value === labelToAdd)?.color
-                                                    : "#ccc",
-                                            color: context.selected ? "#fff" : "#444",
-                                            transition: "0.2s",
-                                            fontWeight: context.selected ? "600" : "500"
-                                        }
-                                    })
-                                }}
-                            />
+                                {section.inputs.map((inp, i) => (
+                                    <div key={i} className="relative flex-1">
+                                        <InputText
+                                            placeholder={inp.ph}
+                                            value={inp.val}
+                                            onChange={(e) => inp.set(e.target.value)}
+                                            className="w-full p-inputtext-lg pr-8"
+                                            style={{ borderColor: activeColor, boxShadow: "0 0 0 1px " + activeColor }}
+                                        />
+                                        {inp.val && (
+                                            <button
+                                                onClick={() => inp.set("")}
+                                                style={{
+                                                    position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)",
+                                                    color: "#777", background: "transparent", border: "none", cursor: "pointer", fontSize: "14px"
+                                                }}
+                                            >✕</button>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <Button
+                                    icon="pi pi-plus"
+                                    label={section.btnText}
+                                    className="p-button-success shadow-md"
+                                    onClick={section.action}
+                                    style={{ backgroundColor: activeColor, borderColor: activeColor }}
+                                />
+                            </div>
                         </div>
-
-                        {/* Content Input */}
-                        <div className="relative flex-1">
-                            <InputText
-                                placeholder="Content"
-                                value={content}
-                                onChange={(e) => setContent(e.target.value)}
-                                className="w-full p-inputtext-lg pr-8"
-                                style={{
-                                    borderColor: LABELS.find(l => l.value === labelToAdd)?.color,
-                                    boxShadow: "0 0 0 1px " + LABELS.find(l => l.value === labelToAdd)?.color
-                                }}
-                            />
-                            {content && (
-                                <button
-                                    onClick={() => setContent("")}
-                                    style={{
-                                        position: "absolute",
-                                        right: "0.5rem",
-                                        top: "50%",
-                                        transform: "translateY(-50%)",
-                                        color: "#777",
-                                        background: "transparent",
-                                        border: "none",
-                                        cursor: "pointer",
-                                        fontSize: "14px"
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Explanation Input */}
-                        <div className="relative flex-1">
-                            <InputText
-                                placeholder="Explanation"
-                                value={explanation}
-                                onChange={(e) => setExplanation(e.target.value)}
-                                className="w-full p-inputtext-lg pr-8"
-                                style={{
-                                    borderColor: LABELS.find(l => l.value === labelToAdd)?.color,
-                                    boxShadow: "0 0 0 1px " + LABELS.find(l => l.value === labelToAdd)?.color
-                                }}
-                            />
-                            {explanation && (
-                                <button
-                                    onClick={() => setExplanation("")}
-                                    style={{
-                                        position: "absolute",
-                                        right: "0.5rem",
-                                        top: "50%",
-                                        transform: "translateY(-50%)",
-                                        color: "#777",
-                                        background: "transparent",
-                                        border: "none",
-                                        cursor: "pointer",
-                                        fontSize: "14px"
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            )}
-                        </div>
-
-                        <Button
-                            icon="pi pi-plus"
-                            label="Add Content Item"
-                            className="p-button-success shadow-md"
-                            onClick={addContentRow}
-                            style={{
-                                backgroundColor: LABELS.find(l => l.value === labelToAdd)?.color,
-                                borderColor: LABELS.find(l => l.value === labelToAdd)?.color
-                            }}
-                        />
-                    </div>
-                </div>
-
-                {/* Bottom Section */}
-                <div
-                    className="p-4 bg-white rounded-xl shadow-sm border border-gray-100"
-                >
-                    <h2 className="text-lg font-semibold mb-3 text-gray-800">Add AI Request</h2>
-
-                    <div className="flex flex-wrap gap-3 items-center">
-
-                        {/* Label Selector */}
-                        <div className="min-w-[10rem]">
-                            <SelectButton
-                                value={labelForRequest}
-                                onChange={(e) => setLabelForRequest(e.value)}
-                                options={LABELS}
-                                optionLabel="label"
-                                optionValue="value"
-                                className="w-full"
-                                pt={{
-                                    button: ({ context }) => ({
-                                        style: {
-                                            background:
-                                                context.selected
-                                                    ? LABELS.find(x => x.value === labelForRequest)?.color
-                                                    : "#f5f5f5",
-                                            borderColor:
-                                                context.selected
-                                                    ? LABELS.find(x => x.value === labelForRequest)?.color
-                                                    : "#ccc",
-                                            color: context.selected ? "#fff" : "#444",
-                                            transition: "0.2s",
-                                            fontWeight: context.selected ? "600" : "500"
-                                        }
-                                    })
-                                }}
-                            />
-                        </div>
-
-                        {/* Query Input */}
-                        <div className="relative flex-1">
-                            <InputText
-                                placeholder="Request query"
-                                value={requestQuery}
-                                onChange={(e) => setRequestQuery(e.target.value)}
-                                className="w-full p-inputtext-lg pr-8"
-                                style={{
-                                    borderColor: LABELS.find(l => l.value === labelForRequest)?.color,
-                                    boxShadow: "0 0 0 1px " + LABELS.find(l => l.value === labelForRequest)?.color
-                                }}
-                            />
-                            {requestQuery && (
-                                <button
-                                    onClick={() => setRequestQuery("")}
-                                    style={{
-                                        position: "absolute",
-                                        right: "0.5rem",
-                                        top: "50%",
-                                        transform: "translateY(-50%)",
-                                        color: "#777",
-                                        background: "transparent",
-                                        border: "none",
-                                        cursor: "pointer",
-                                        fontSize: "14px"
-                                    }}
-                                >
-                                    ✕
-                                </button>
-                            )}
-                        </div>
-
-                        <Button
-                            icon="pi pi-plus"
-                            label="Add AI Request"
-                            className="p-button-success shadow-md"
-                            onClick={addRequestRow}
-                            style={{
-                                backgroundColor: LABELS.find(l => l.value === labelForRequest)?.color,
-                                borderColor: LABELS.find(l => l.value === labelForRequest)?.color
-                            }}
-                        />
-                    </div>
-                </div>
+                    );
+                })}
             </div>
 
 
