@@ -217,6 +217,173 @@ export default function App() {
         );
     };
 
+
+    const STATUS_COLORS = ['#006400', '#228B22', '#32CD32', '#ADFF2F', '#FFA500', '#8B0000']; // green → dark red
+    const QUANTITY_COLORS = ['#8B0000', '#FF4500', '#FFA500', '#FFD700', '#ADFF2F', '#006400']; // dark red → green
+
+// Convert date string to difference from now in human-readable format
+    const timeDiffString = (dateStr) => {
+        const now = new Date();
+        const date = new Date(dateStr);
+        const diffMs = now - date;
+        const diffSeconds = Math.floor(diffMs / 1000);
+        const diffMinutes = Math.floor(diffSeconds / 60);
+        const diffHours = Math.floor(diffMinutes / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffDays > 0) return `${diffDays}d ${diffHours % 24}h`;
+        if (diffHours > 0) return `${diffHours}h ${diffMinutes % 60}m`;
+        if (diffMinutes > 0) return `${diffMinutes}m ${diffSeconds % 60}s`;
+        return `${diffSeconds}s`;
+    };
+
+// Status color: newer = green, older = dark red
+    const getStatusColor = (dateStr) => {
+        const now = new Date();
+        const date = new Date(dateStr);
+        const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+        if (diffDays <= 1) return STATUS_COLORS[0];
+        if (diffDays <= 2) return STATUS_COLORS[1];
+        if (diffDays <= 5) return STATUS_COLORS[2];
+        if (diffDays <= 10) return STATUS_COLORS[3];
+        if (diffDays <= 20) return STATUS_COLORS[4];
+        return STATUS_COLORS[5];
+    };
+
+// Quantity color: 1 = dark red, 6+ = green
+    const getQuantityColor = (repeats) => {
+        if (repeats >= 6) return QUANTITY_COLORS[5];
+        return QUANTITY_COLORS[Math.min(repeats - 1, QUANTITY_COLORS.length - 1)];
+    };
+
+
+    const statusBodyTemplate = (rowData) => {
+        return (
+            <span
+                style={{
+                    padding: '5px 10px',
+                    borderRadius: '4px',
+                    color: 'white',
+                    backgroundColor: getStatusColor(rowData.lastRepeatDate),
+                    fontWeight: 'bold',
+                }}
+            >
+            {timeDiffString(rowData.lastRepeatDate)}
+        </span>
+        );
+    };
+
+// Filter dropdown with all status colors
+    const statusFilterTemplate = () => {
+        const options = [
+            { label: 'All', value: 'All' },
+            ...STATUS_COLORS.map((color, index) => ({
+                label: `Status ${index + 1}`,
+                value: index,
+            })),
+        ];
+
+        return (
+            <Dropdown
+                value={filters.status?.value || 'All'}
+                options={options}
+                optionLabel="label"
+                placeholder="Filter Status"
+                style={{ minWidth: '120px' }}
+                onChange={(e) => {
+                    const value = e.value === 'All' ? null : e.value;
+                    setFilters({
+                        ...filters,
+                        status: { value, matchMode: 'equals' },
+                    });
+                }}
+            />
+        );
+    };
+
+    const quantityBodyTemplate = (rowData) => {
+        return (
+            <span
+                onClick={() => {
+                    const now = new Date();
+                    const lastIncrement = rowData.lastIncrement ? new Date(rowData.lastIncrement) : null;
+                    if (lastIncrement && now - lastIncrement < 15 * 60 * 1000) {
+                        toast.current.show({
+                            severity: 'warn',
+                            summary: 'Too Soon',
+                            detail: 'You can only increment once every 15 minutes.',
+                            life: 2000,
+                        });
+                        return;
+                    }
+
+                    const confirmIncrement = window.confirm(`Increment repeat count for "${rowData.content}"?`);
+                    if (confirmIncrement) {
+                        const updatedRows = rows.map((r) =>
+                            r.id === rowData.id
+                                ? {
+                                    ...r,
+                                    numberOfRepeats: r.numberOfRepeats + 1,
+                                    lastRepeatDate: now.toISOString(),
+                                    lastIncrement: now.toISOString(),
+                                }
+                                : r
+                        );
+                        setRows(updatedRows);
+                        toast.current.show({
+                            severity: 'success',
+                            summary: 'Incremented',
+                            detail: `New count: ${rowData.numberOfRepeats + 1}`,
+                            life: 1500,
+                        });
+                    }
+                }}
+                style={{
+                    display: 'inline-block',
+                    width: 30,
+                    height: 30,
+                    lineHeight: '30px',
+                    borderRadius: '50%',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    color: 'white',
+                    backgroundColor: getQuantityColor(rowData.numberOfRepeats),
+                }}
+            >
+            {rowData.numberOfRepeats}
+        </span>
+        );
+    };
+
+// Filter for quantity (colored statuses)
+    const quantityFilterTemplate = () => {
+        const options = [
+            { label: 'All', value: 'All' },
+            ...QUANTITY_COLORS.map((color, index) => ({
+                label: `Repeats ${index + 1}`,
+                value: index,
+            })),
+        ];
+
+        return (
+            <Dropdown
+                value={filters.quantity?.value || 'All'}
+                options={options}
+                optionLabel="label"
+                placeholder="Filter Repeats"
+                style={{ minWidth: '120px' }}
+                onChange={(e) => {
+                    const value = e.value === 'All' ? null : e.value;
+                    setFilters({
+                        ...filters,
+                        quantity: { value, matchMode: 'equals' },
+                    });
+                }}
+            />
+        );
+    };
+
     return (
         <div className="card p-fluid" style={{ padding: 20 }}>
             <Toast ref={toast} />
@@ -241,6 +408,27 @@ export default function App() {
 
             <Column header="#" body={orderBody} style={{ width: "4rem", textAlign: "center" }} />
                 <Column header="AI Actions" body={actionsBody} style={{ minWidth: "20rem" }} />
+
+                <Column
+                    field="status"
+                    header="Status"
+                    body={statusBodyTemplate}
+                    sortable
+                    filter
+                    filterElement={statusFilterTemplate}
+                    style={{ minWidth: '12rem' }}
+                />
+
+                <Column
+                    field="quantity"
+                    header="Repeats"
+                    body={quantityBodyTemplate}
+                    filter
+                    filterElement={quantityFilterTemplate}
+                    style={{ minWidth: '8rem', textAlign: 'center' }}
+                />
+
+
 
                 <Column
                     field="label"
