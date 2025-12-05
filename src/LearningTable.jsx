@@ -248,18 +248,22 @@ export default function LearningTable() {
     const getStatusLabel = (dateStr) => STATUS_LABELS.find(s => new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000)?.name || "Lost";
     const getRepeatsLabel = (repeats) => REPEATS_LABELS.find(r => repeats >= r.min && repeats <= r.max)?.name || "Mastered";
 
-    const statusSortFunction = (e) => {
-        const order = e.order;
-        return [...e.data].sort((a, b) => {
+    const statusSortFunction = (event) => {
+        const data = event.data;
+        const order = event.order;
+
+        return data.sort((a, b) => {
             const aIndex = STATUS_LABELS.findIndex(s => s.name === a.statusLabel);
             const bIndex = STATUS_LABELS.findIndex(s => s.name === b.statusLabel);
             return order * (aIndex - bIndex);
         });
     };
 
-    const repeatsSortFunction = (e) => {
-        const order = e.order;
-        return [...e.data].sort((a, b) => {
+    const repeatsSortFunction = (event) => {
+        const data = event.data;
+        const order = event.order;
+
+        return data.sort((a, b) => {
             const aIndex = REPEATS_LABELS.findIndex(r => r.name === a.repeatsLabel);
             const bIndex = REPEATS_LABELS.findIndex(r => r.name === b.repeatsLabel);
             return order * (aIndex - bIndex);
@@ -399,6 +403,11 @@ export default function LearningTable() {
                     showClearButton={false}
                     showApplyButton={false}
                     style={{ minWidth: "22rem" }}
+                />
+                <Column
+                    rowEditor
+                    headerStyle={{ width: "8rem", minWidth: "6rem" }}
+                    bodyStyle={{ textAlign: "center" }}
                 />
             </DataTable>
         </div>
