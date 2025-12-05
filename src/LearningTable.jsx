@@ -249,25 +249,29 @@ export default function LearningTable() {
     const getRepeatsLabel = (repeats) => REPEATS_LABELS.find(r => repeats >= r.min && repeats <= r.max)?.name || "Mastered";
 
     const statusSortFunction = (event) => {
-        const data = event.data;
+        const data = [...event.data];
         const order = event.order;
 
-        return data.sort((a, b) => {
+        data.sort((a, b) => {
             const aIndex = STATUS_LABELS.findIndex(s => s.name === a.statusLabel);
             const bIndex = STATUS_LABELS.findIndex(s => s.name === b.statusLabel);
             return order * (aIndex - bIndex);
         });
+
+        return data;
     };
 
     const repeatsSortFunction = (event) => {
-        const data = event.data;
+        const data = [...event.data];
         const order = event.order;
 
-        return data.sort((a, b) => {
+        data.sort((a, b) => {
             const aIndex = REPEATS_LABELS.findIndex(r => r.name === a.repeatsLabel);
             const bIndex = REPEATS_LABELS.findIndex(r => r.name === b.repeatsLabel);
             return order * (aIndex - bIndex);
         });
+
+        return data;
     };
 
     const menuModel = selectedRow ? [
@@ -408,6 +412,53 @@ export default function LearningTable() {
                     rowEditor
                     headerStyle={{ width: "8rem", minWidth: "6rem" }}
                     bodyStyle={{ textAlign: "center" }}
+                    body={(rowData) => {
+                        const isEditing = editingRows[rowData.id];
+                        if (isEditing) {
+                            return (
+                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                    <Button
+                                        icon="pi pi-check"
+                                        className="p-button-text p-button-success"
+                                        onClick={(e) => {
+                                            const saveEvent = {
+                                                originalEvent: e,
+                                                data: rowData,
+                                                newData: rowData,
+                                                index: rows.findIndex(r => r.id === rowData.id)
+                                            };
+                                            onRowEditComplete(saveEvent);
+                                            setEditingRows({});
+                                        }}
+                                    />
+                                    <Button
+                                        icon="pi pi-times"
+                                        className="p-button-text p-button-danger"
+                                        onClick={() => setEditingRows({})}
+                                    />
+                                    <Button
+                                        icon="pi pi-trash"
+                                        className="p-button-text p-button-danger"
+                                        onClick={() => deleteRow(rowData)}
+                                    />
+                                </div>
+                            );
+                        }
+                        return (
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                <Button
+                                    icon="pi pi-pencil"
+                                    className="p-button-text"
+                                    onClick={() => setEditingRows({ [rowData.id]: true })}
+                                />
+                                <Button
+                                    icon="pi pi-trash"
+                                    className="p-button-text p-button-danger"
+                                    onClick={() => deleteRow(rowData)}
+                                />
+                            </div>
+                        );
+                    }}
                 />
             </DataTable>
         </div>
