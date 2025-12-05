@@ -343,8 +343,9 @@ export default function LearningTable() {
         <div className="card p-fluid" style={{ padding: 20 }}>
             <Toast ref={toast} />
             <ContextMenu model={menuModel} ref={cm} />
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                <h2>Combined Table — Editable Rows, AI Actions, Colored Filters</h2>
+            <div style={{ display: "flex-column", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+
+                <Button icon="pi pi-plus" label="Add Row" className="p-button-success p-mr-2" onClick={addRow} />
                 <Button icon="pi pi-plus" label="Add Row" className="p-button-success p-mr-2" onClick={addRow} />
             </div>
             <DataTable
