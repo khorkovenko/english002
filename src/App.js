@@ -38,24 +38,32 @@ const initialData = [
         label: "word",
         content: "ubiquitous",
         explanation: "Found everywhere; omnipresent.",
+        lastRepeatDate: "11/5/2021 12:42",
+        numberOfRepeats: 1,
     },
     {
         id: 2,
         label: "rule",
         content: "subject-verb agreement",
         explanation: "Subjects and verbs must agree in number.",
+        lastRepeatDate: "10/5/2021 10:42",
+        numberOfRepeats: 2,
     },
     {
         id: 3,
         label: "topic",
         content: "present perfect",
         explanation: "Used for actions with relevance to present.",
+        lastRepeatDate: "10/5/2025 19:42",
+        numberOfRepeats: 4,
     },
     {
         id: 4,
         label: "word",
         content: "serendipity",
         explanation: "Finding something good without looking for it.",
+        lastRepeatDate: "10/5/2025 08:41",
+        numberOfRepeats: 5,
     },
 ];
 
@@ -233,6 +241,7 @@ export default function App() {
 
             <Column header="#" body={orderBody} style={{ width: "4rem", textAlign: "center" }} />
                 <Column header="AI Actions" body={actionsBody} style={{ minWidth: "20rem" }} />
+
                 <Column
                     field="label"
                     header="Label"
