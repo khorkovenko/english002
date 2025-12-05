@@ -144,20 +144,28 @@ export default function LearningTable() {
     };
 
     const statusFilterTemplate = (options) => (
-        <Dropdown
-            value={options.value}
-            options={STATUS_LABELS.map(s => ({ label: s.name, value: s.name }))}
-            optionLabel="label"
-            placeholder="Select Status"
-            onChange={(e) => options.filterApplyCallback(e.value)}
-            showClear
-            itemTemplate={(option) => (
-                <div style={{ backgroundColor: STATUS_LABELS.find(s => s.name === option.value)?.color, color: "white", padding: "4px 8px", borderRadius: 4 }}>
-                    {option.label}
-                </div>
+        <div style={{ position: 'relative' }}>
+            <Dropdown
+                value={options.value}
+                options={STATUS_LABELS.map(s => ({ label: s.name, value: s.name }))}
+                optionLabel="label"
+                placeholder="Select Status"
+                onChange={(e) => options.filterApplyCallback(e.value)}
+                itemTemplate={(option) => (
+                    <div style={{ backgroundColor: STATUS_LABELS.find(s => s.name === option.value)?.color, color: "white", padding: "4px 8px", borderRadius: 4 }}>
+                        {option.label}
+                    </div>
+                )}
+                style={{ minWidth: "150px" }}
+            />
+            {options.value && (
+                <i
+                    className="pi pi-times"
+                    style={{ position: 'absolute', right: '35px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '0.9rem', color: '#6c757d' }}
+                    onClick={() => options.filterApplyCallback(null)}
+                />
             )}
-            style={{ minWidth: "150px" }}
-        />
+        </div>
     );
 
     const quantityBodyTemplate = (rowData) => {
@@ -187,38 +195,54 @@ export default function LearningTable() {
     };
 
     const quantityFilterTemplate = (options) => (
-        <Dropdown
-            value={options.value}
-            options={REPEATS_LABELS.map(r => ({ label: r.name, value: r.name }))}
-            optionLabel="label"
-            placeholder="Select Repeats"
-            onChange={(e) => options.filterApplyCallback(e.value)}
-            showClear
-            itemTemplate={(option) => (
-                <div style={{ backgroundColor: REPEATS_LABELS.find(r => r.name === option.value)?.color, color: "white", padding: "4px 8px", borderRadius: 4 }}>
-                    {option.label}
-                </div>
+        <div style={{ position: 'relative' }}>
+            <Dropdown
+                value={options.value}
+                options={REPEATS_LABELS.map(r => ({ label: r.name, value: r.name }))}
+                optionLabel="label"
+                placeholder="Select Repeats"
+                onChange={(e) => options.filterApplyCallback(e.value)}
+                itemTemplate={(option) => (
+                    <div style={{ backgroundColor: REPEATS_LABELS.find(r => r.name === option.value)?.color, color: "white", padding: "4px 8px", borderRadius: 4 }}>
+                        {option.label}
+                    </div>
+                )}
+                style={{ minWidth: "150px" }}
+            />
+            {options.value && (
+                <i
+                    className="pi pi-times"
+                    style={{ position: 'absolute', right: '35px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '0.9rem', color: '#6c757d' }}
+                    onClick={() => options.filterApplyCallback(null)}
+                />
             )}
-            style={{ minWidth: "150px" }}
-        />
+        </div>
     );
 
     const labelFilterTemplate = (options) => (
-        <Dropdown
-            value={options.value}
-            options={LABELS}
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select Label"
-            onChange={(e) => options.filterApplyCallback(e.value)}
-            showClear
-            itemTemplate={(option) => (
-                <div style={{ backgroundColor: option.color || "#fff", color: "white", padding: "4px 8px", borderRadius: 4 }}>
-                    {option.label}
-                </div>
+        <div style={{ position: 'relative' }}>
+            <Dropdown
+                value={options.value}
+                options={LABELS}
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select Label"
+                onChange={(e) => options.filterApplyCallback(e.value)}
+                itemTemplate={(option) => (
+                    <div style={{ backgroundColor: option.color || "#fff", color: "white", padding: "4px 8px", borderRadius: 4 }}>
+                        {option.label}
+                    </div>
+                )}
+                style={{ minWidth: "150px" }}
+            />
+            {options.value && (
+                <i
+                    className="pi pi-times"
+                    style={{ position: 'absolute', right: '35px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '0.9rem', color: '#6c757d' }}
+                    onClick={() => options.filterApplyCallback(null)}
+                />
             )}
-            style={{ minWidth: "150px" }}
-        />
+        </div>
     );
 
     const getStatusLabel = (dateStr) => STATUS_LABELS.find(s => new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000)?.name || "Lost";
@@ -320,6 +344,9 @@ export default function LearningTable() {
                     filter
                     filterElement={statusFilterTemplate}
                     showFilterMenu={false}
+                    showFilterMatchModes={false}
+                    showClearButton={false}
+                    showApplyButton={false}
                     style={{ minWidth: "12rem" }}
                 />
                 <Column
@@ -331,6 +358,9 @@ export default function LearningTable() {
                     filter
                     filterElement={quantityFilterTemplate}
                     showFilterMenu={false}
+                    showFilterMatchModes={false}
+                    showClearButton={false}
+                    showApplyButton={false}
                     style={{ minWidth: "8rem", textAlign: "center" }}
                 />
                 <Column
@@ -340,6 +370,9 @@ export default function LearningTable() {
                     filter
                     filterElement={labelFilterTemplate}
                     showFilterMenu={false}
+                    showFilterMatchModes={false}
+                    showClearButton={false}
+                    showApplyButton={false}
                     sortable
                     style={{ width: "12rem" }}
                 />
@@ -350,6 +383,9 @@ export default function LearningTable() {
                     filter
                     filterPlaceholder="Search content"
                     showFilterMenu={false}
+                    showFilterMatchModes={false}
+                    showClearButton={false}
+                    showApplyButton={false}
                     style={{ minWidth: "18rem" }}
                 />
                 <Column
@@ -359,12 +395,10 @@ export default function LearningTable() {
                     filter
                     filterPlaceholder="Search explanation"
                     showFilterMenu={false}
+                    showFilterMatchModes={false}
+                    showClearButton={false}
+                    showApplyButton={false}
                     style={{ minWidth: "22rem" }}
-                />
-                <Column
-                    rowEditor
-                    headerStyle={{ width: "8rem", minWidth: "6rem" }}
-                    bodyStyle={{ textAlign: "center" }}
                 />
             </DataTable>
         </div>
