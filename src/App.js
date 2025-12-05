@@ -183,6 +183,32 @@ export default function App() {
         return <></>;
     };
 
+    const [filters, setFilters] = useState({
+        label: { value: null, matchMode: 'equals' }
+    });
+
+    const labelFilterTemplate = () => {
+        return (
+            <Dropdown
+                value={filters.label.value || 'All'}
+                options={[
+                    { label: 'All', value: 'All' },
+                    ...LABELS
+                ]}
+                onChange={(e) => {
+                    const value = e.value === 'All' ? null : e.value;
+                    setFilters({
+                        ...filters,
+                        label: { value: value, matchMode: 'equals' }
+                    });
+                }}
+                optionLabel="label"
+                placeholder="All"
+                style={{ minWidth: '120px' }}
+            />
+        );
+    };
+
     return (
         <div className="card p-fluid" style={{ padding: 20 }}>
             <Toast ref={toast} />
@@ -200,22 +226,23 @@ export default function App() {
                 dataKey="id"
                 onRowEditComplete={onRowEditComplete}
                 filterDisplay="row"
+                filters={filters}
+                onFilter={(e) => setFilters(e.filters)}
                 tableStyle={{ minWidth: "60rem" }}
             >
-                <Column header="#" body={orderBody} style={{ width: "4rem", textAlign: "center" }} />
-                <Column header="AI Actions" body={actionsBody} style={{ minWidth: "20rem" }} />
 
+            <Column header="#" body={orderBody} style={{ width: "4rem", textAlign: "center" }} />
+                <Column header="AI Actions" body={actionsBody} style={{ minWidth: "20rem" }} />
                 <Column
                     field="label"
                     header="Label"
-                    editor={(options) => labelEditor(options)}
                     body={labelBody}
                     filter
-                    filterPlaceholder="Filter by label"
-                    filterField="label"
+                    showFilterMenu={false}
+                    filterElement={labelFilterTemplate}
+                    sortable
                     style={{ width: "12rem" }}
                 />
-
                 <Column
                     field="content"
                     header="Content"
