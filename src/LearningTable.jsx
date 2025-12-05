@@ -249,16 +249,13 @@ export default function LearningTable() {
     const getRepeatsLabel = (repeats) => REPEATS_LABELS.find(r => repeats >= r.min && repeats <= r.max)?.name || "Mastered";
 
     const statusSortFunction = (event) => {
-        const data = [...event.data];
         const order = event.order;
 
-        data.sort((a, b) => {
-            const aIndex = STATUS_LABELS.findIndex(s => s.name === a.statusLabel);
-            const bIndex = STATUS_LABELS.findIndex(s => s.name === b.statusLabel);
-            return order * (aIndex - bIndex);
+        return [...event.data].sort((a, b) => {
+            const diffA = new Date() - new Date(a.lastRepeatDate);
+            const diffB = new Date() - new Date(b.lastRepeatDate);
+            return order * (diffA - diffB);
         });
-
-        return data;
     };
 
     const repeatsSortFunction = (event) => {
