@@ -313,6 +313,32 @@ export default function LearningTable() {
         setRows(_rows);
     };
 
+    const textFilterTemplate = (options) => (
+        <div style={{ position: "relative", width: "100%" }}>
+            <InputText
+                value={options.value || ""}
+                onChange={(e) => options.filterApplyCallback(e.target.value)}
+                placeholder={options.filterPlaceholder}
+                style={{ width: "100%" }}
+            />
+
+            {options.value && (
+                <i
+                    className="pi pi-times"
+                    style={{
+                        position: "absolute",
+                        right: "8px",
+                        top: "50%",
+                        transform: "translateY(-50%)",
+                        cursor: "pointer",
+                        color: "#6c757d"
+                    }}
+                    onClick={() => options.filterApplyCallback("")}
+                />
+            )}
+        </div>
+    );
+
     return (
         <div className="card p-fluid" style={{ padding: 20 }}>
             <Toast ref={toast} />
@@ -386,25 +412,27 @@ export default function LearningTable() {
                     header="Content"
                     editor={(options) => textEditor(options, "content")}
                     filter
-                    filterPlaceholder="Search content"
+                    filterElement={(options) => textFilterTemplate({ ...options, filterPlaceholder: "Search content" })}
                     showFilterMenu={false}
                     showFilterMatchModes={false}
                     showClearButton={false}
                     showApplyButton={false}
                     style={{ minWidth: "18rem" }}
                 />
+
                 <Column
                     field="explanation"
                     header="Explanation"
                     editor={(options) => textEditor(options, "explanation")}
                     filter
-                    filterPlaceholder="Search explanation"
+                    filterElement={(options) => textFilterTemplate({ ...options, filterPlaceholder: "Search explanation" })}
                     showFilterMenu={false}
                     showFilterMatchModes={false}
                     showClearButton={false}
                     showApplyButton={false}
                     style={{ minWidth: "22rem" }}
                 />
+
                 <Column
                     rowEditor
                     headerStyle={{ width: "8rem", minWidth: "6rem" }}
