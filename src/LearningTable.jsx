@@ -8,6 +8,7 @@ import { Tag } from "primereact/tag";
 import { Toast } from "primereact/toast";
 import { ContextMenu } from "primereact/contextmenu";
 import { FilterMatchMode } from 'primereact/api';
+import {SelectButton} from "primereact/selectbutton";
 
 const LABELS = [
     { label: "word", value: "word", color: "#2196F3" },
@@ -339,15 +340,237 @@ export default function LearningTable() {
         </div>
     );
 
+    const [labelToAdd, setLabelToAdd] = useState(LABELS[0].value);
+    const [labelForRequest, setLabelForRequest] = useState(LABELS[0].value);
+
+
+    const [content, setContent] = useState("");
+    const [explanation, setExplanation] = useState("");
+
+
+    const [requestQuery, setRequestQuery] = useState("");
+
+
+    const addContentRow = () => {
+        console.log("Submit to Supabase — Content Item:", {
+            label: labelToAdd,
+            content,
+            explanation,
+        });
+    };
+
+
+    const addRequestRow = () => {
+        console.log("Submit to Supabase — AI Request:", {
+            label: labelForRequest,
+            requestQuery,
+        });
+    };
+
+
     return (
         <div className="card p-fluid" style={{ padding: 20 }}>
             <Toast ref={toast} />
             <ContextMenu model={menuModel} ref={cm} />
-            <div style={{ display: "flex-column", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div
+                className="flex flex-col gap-4 w-full p-4 bg-gray-50 rounded-2xl shadow-md border border-gray-200"
+            >
+                {/* Top Section: Content Creation */}
+                <div className="p-4 bg-white rounded-xl shadow-sm border border-gray-100">
+                    <h2 className="text-lg font-semibold mb-3 text-gray-800">Add Content Item</h2>
 
-                <Button icon="pi pi-plus" label="Add Row" className="p-button-success p-mr-2" onClick={addRow} />
-                <Button icon="pi pi-plus" label="Add Row" className="p-button-success p-mr-2" onClick={addRow} />
+                    <div className="flex flex-wrap gap-3 items-center">
+
+                        {/* Label Selector */}
+                        <div className="min-w-[10rem]">
+                            <SelectButton
+                                value={labelToAdd}
+                                onChange={(e) => setLabelToAdd(e.value)}
+                                options={LABELS}
+                                optionLabel="label"
+                                optionValue="value"
+                                className="w-full"
+                                pt={{
+                                    button: ({ context }) => ({
+                                        style: {
+                                            background:
+                                                context.selected
+                                                    ? LABELS.find(x => x.value === labelToAdd)?.color
+                                                    : "#f5f5f5",
+                                            borderColor:
+                                                context.selected
+                                                    ? LABELS.find(x => x.value === labelToAdd)?.color
+                                                    : "#ccc",
+                                            color: context.selected ? "#fff" : "#444",
+                                            transition: "0.2s",
+                                            fontWeight: context.selected ? "600" : "500"
+                                        }
+                                    })
+                                }}
+                            />
+                        </div>
+
+                        {/* Content Input */}
+                        <div className="relative flex-1">
+                            <InputText
+                                placeholder="Content"
+                                value={content}
+                                onChange={(e) => setContent(e.target.value)}
+                                className="w-full p-inputtext-lg pr-8"
+                                style={{
+                                    borderColor: LABELS.find(l => l.value === labelToAdd)?.color,
+                                    boxShadow: "0 0 0 1px " + LABELS.find(l => l.value === labelToAdd)?.color
+                                }}
+                            />
+                            {content && (
+                                <button
+                                    onClick={() => setContent("")}
+                                    style={{
+                                        position: "absolute",
+                                        right: "0.5rem",
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        color: "#777",
+                                        background: "transparent",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "14px"
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Explanation Input */}
+                        <div className="relative flex-1">
+                            <InputText
+                                placeholder="Explanation"
+                                value={explanation}
+                                onChange={(e) => setExplanation(e.target.value)}
+                                className="w-full p-inputtext-lg pr-8"
+                                style={{
+                                    borderColor: LABELS.find(l => l.value === labelToAdd)?.color,
+                                    boxShadow: "0 0 0 1px " + LABELS.find(l => l.value === labelToAdd)?.color
+                                }}
+                            />
+                            {explanation && (
+                                <button
+                                    onClick={() => setExplanation("")}
+                                    style={{
+                                        position: "absolute",
+                                        right: "0.5rem",
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        color: "#777",
+                                        background: "transparent",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "14px"
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+
+                        <Button
+                            icon="pi pi-plus"
+                            label="Add Content Item"
+                            className="p-button-success shadow-md"
+                            onClick={addContentRow}
+                            style={{
+                                backgroundColor: LABELS.find(l => l.value === labelToAdd)?.color,
+                                borderColor: LABELS.find(l => l.value === labelToAdd)?.color
+                            }}
+                        />
+                    </div>
+                </div>
+
+                {/* Bottom Section */}
+                <div
+                    className="p-4 bg-white rounded-xl shadow-sm border border-gray-100"
+                >
+                    <h2 className="text-lg font-semibold mb-3 text-gray-800">Add AI Request</h2>
+
+                    <div className="flex flex-wrap gap-3 items-center">
+
+                        {/* Label Selector */}
+                        <div className="min-w-[10rem]">
+                            <SelectButton
+                                value={labelForRequest}
+                                onChange={(e) => setLabelForRequest(e.value)}
+                                options={LABELS}
+                                optionLabel="label"
+                                optionValue="value"
+                                className="w-full"
+                                pt={{
+                                    button: ({ context }) => ({
+                                        style: {
+                                            background:
+                                                context.selected
+                                                    ? LABELS.find(x => x.value === labelForRequest)?.color
+                                                    : "#f5f5f5",
+                                            borderColor:
+                                                context.selected
+                                                    ? LABELS.find(x => x.value === labelForRequest)?.color
+                                                    : "#ccc",
+                                            color: context.selected ? "#fff" : "#444",
+                                            transition: "0.2s",
+                                            fontWeight: context.selected ? "600" : "500"
+                                        }
+                                    })
+                                }}
+                            />
+                        </div>
+
+                        {/* Query Input */}
+                        <div className="relative flex-1">
+                            <InputText
+                                placeholder="Request query"
+                                value={requestQuery}
+                                onChange={(e) => setRequestQuery(e.target.value)}
+                                className="w-full p-inputtext-lg pr-8"
+                                style={{
+                                    borderColor: LABELS.find(l => l.value === labelForRequest)?.color,
+                                    boxShadow: "0 0 0 1px " + LABELS.find(l => l.value === labelForRequest)?.color
+                                }}
+                            />
+                            {requestQuery && (
+                                <button
+                                    onClick={() => setRequestQuery("")}
+                                    style={{
+                                        position: "absolute",
+                                        right: "0.5rem",
+                                        top: "50%",
+                                        transform: "translateY(-50%)",
+                                        color: "#777",
+                                        background: "transparent",
+                                        border: "none",
+                                        cursor: "pointer",
+                                        fontSize: "14px"
+                                    }}
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+
+                        <Button
+                            icon="pi pi-plus"
+                            label="Add AI Request"
+                            className="p-button-success shadow-md"
+                            onClick={addRequestRow}
+                            style={{
+                                backgroundColor: LABELS.find(l => l.value === labelForRequest)?.color,
+                                borderColor: LABELS.find(l => l.value === labelForRequest)?.color
+                            }}
+                        />
+                    </div>
+                </div>
             </div>
+
+
             <DataTable
                 value={rows}
                 editMode="row"
