@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
-// Allowed device fingerprints
 const ALLOWED_DEVICES = [
     "29dbe604bbe34680de58c65ac5eadc5f",
     "cfdc176af75af5d32d939d8044def022",
@@ -14,7 +13,7 @@ export default function AuthWrapper({ children }) {
     const [deviceCode, setDeviceCode] = useState(null);
 
     useEffect(() => {
-        let isMounted = true; // prevents ghost renders
+        let isMounted = true;
 
         const checkDevice = async () => {
             try {
@@ -40,16 +39,14 @@ export default function AuthWrapper({ children }) {
         checkDevice();
 
         return () => {
-            isMounted = false; // cleanup to avoid stale updates
+            isMounted = false;
         };
     }, []);
 
-    // 🔒 1. absolutely no children rendered until check completes
     if (status === "checking") {
         return <div className="p-4 text-center">Checking device...</div>;
     }
 
-    // ❌ 2. unauthorized devices blocked completely
     if (status === "blocked") {
         return (
             <div className="p-4 text-center" style={{ color: "red" }}>
@@ -61,6 +58,5 @@ export default function AuthWrapper({ children }) {
         );
     }
 
-    // ✅ 3. Only render children AFTER explicit authorization
     return <>{children}</>;
 }
