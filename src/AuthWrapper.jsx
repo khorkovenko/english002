@@ -3,7 +3,9 @@ import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
 // Allowed device fingerprints
 const ALLOWED_DEVICES = [
-    ""
+    "29dbe604bbe34680de58c65ac5eadc5f",
+    "cfdc176af75af5d32d939d8044def022",
+    "31e922a921e07c4dd21cc75234c37737",
 ];
 
 export default function AuthWrapper({ children }) {
