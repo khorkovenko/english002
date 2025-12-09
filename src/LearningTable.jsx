@@ -10,6 +10,10 @@ import { ContextMenu } from "primereact/contextmenu";
 import { FilterMatchMode } from 'primereact/api';
 import { SelectButton } from "primereact/selectbutton";
 import { supabase } from './supabaseClient';
+import { SpellGameModal } from "./SpellGameModal";
+import { TypingTrainerModal } from "./TypingTrainerModal";
+
+
 
 const LABELS = [
     { label: "word", value: "word", color: "#2196F3" },
