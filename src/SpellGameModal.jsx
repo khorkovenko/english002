@@ -5,7 +5,7 @@ import "primereact/resources/themes/saga-blue/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 
-const SpellGameModal = ({ spellText, visible, onClose }) => {
+export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const canvasRef = useRef(null);
     const [drawing, setDrawing] = useState(false);
     const [paths, setPaths] = useState([]);

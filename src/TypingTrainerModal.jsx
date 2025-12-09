@@ -6,7 +6,7 @@ import { InputNumber } from 'primereact/inputnumber';
 import clickSoundFile from './typewriter.mp3';
 import failSoundFile from './error.mp3';
 
-const TypingTrainerModal = ({ wordData, onClose, visible }) => {
+export const TypingTrainerModal = ({ wordData, onClose, visible }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
     const [feedback, setFeedback] = useState([]);
     const [colorHistory, setColorHistory] = useState([]);
@@ -38,13 +38,14 @@ const TypingTrainerModal = ({ wordData, onClose, visible }) => {
         ? wordData.word.charAt(0).toUpperCase() + wordData.word.slice(1)
         : '';
 
-    const parts = [wordData?.word, wordData?.explanation];
+    const rawPhrase = wordData?.combinedText
+        ? wordData.combinedText
+        : [wordData?.word, wordData?.explanation,
+            (wordData?.association && !isValidUrl(wordData.association))
+                ? wordData.association
+                : null
+        ].filter(Boolean).join(' - ');
 
-    if (wordData?.association && !isValidUrl(wordData.association)) {
-        parts.push(wordData.association);
-    }
-
-    const rawPhrase = parts.filter(Boolean).join(' - ').trim();
 
     const phrase = rawPhrase.charAt(0).toUpperCase() + rawPhrase.slice(1);
 

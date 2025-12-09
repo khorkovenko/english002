@@ -13,8 +13,6 @@ import { supabase } from './supabaseClient';
 import { SpellGameModal } from "./SpellGameModal";
 import { TypingTrainerModal } from "./TypingTrainerModal";
 
-
-
 const LABELS = [
     { label: "word", value: "word", color: "#2196F3" },
     { label: "rule", value: "rule", color: "#4CAF50" },
@@ -50,6 +48,7 @@ const REPEATS_LABELS = [
 ];
 
 export default function LearningTable() {
+    // State Management
     const [rows, setRows] = useState([]);
     const [editingRows, setEditingRows] = useState({});
     const [filters, setFilters] = useState({
@@ -63,9 +62,8 @@ export default function LearningTable() {
     const [loading, setLoading] = useState(true);
     const [aiQueries, setAiQueries] = useState({});
     const [customAiActions, setCustomAiActions] = useState({});
-    const toast = useRef(null);
-    const cm = useRef(null);
 
+    // Form State
     const [labelToAdd, setLabelToAdd] = useState(LABELS[0].value);
     const [labelForRequest, setLabelForRequest] = useState(LABELS[0].value);
     const [content, setContent] = useState("");
@@ -73,11 +71,28 @@ export default function LearningTable() {
     const [requestQuery, setRequestQuery] = useState("");
     const [customActionName, setCustomActionName] = useState("");
 
+    // Game Modal State
+    const [gameModalVisible, setGameModalVisible] = useState(false);
+    const [gameModalData, setGameModalData] = useState(null);
+    const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+
+    // Refs
+    const toast = useRef(null);
+    const cm = useRef(null);
+
+    // Effects
     useEffect(() => {
         fetchData();
         fetchAiQueries();
+
+        const handleResize = () => {
+            setIsDesktop(window.innerWidth >= 768);
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Data Fetching
     const fetchData = async () => {
         try {
             setLoading(true);
@@ -97,12 +112,7 @@ export default function LearningTable() {
             setRows(processedData);
         } catch (error) {
             console.error('Error fetching data:', error);
-            toast.current?.show({
-                severity: "error",
-                summary: "Error",
-                detail: "Failed to load data",
-                life: 3000
-            });
+            showToast("error", "Error", "Failed to load data");
         } finally {
             setLoading(false);
         }
@@ -126,7 +136,6 @@ export default function LearningTable() {
                 }
                 queriesMap[item.label][item.action_key] = item.query_text;
 
-                // Check if this is a custom action (not in default actions)
                 const isDefault = defaultActionsByLabel[item.label]?.some(
                     act => act.key === item.action_key
                 );
@@ -147,14 +156,50 @@ export default function LearningTable() {
         }
     };
 
+    // Helper Functions
+    const showToast = (severity, summary, detail, life = 3000) => {
+        toast.current?.show({ severity, summary, detail, life });
+    };
+
+    const getStatusLabel = (dateStr) => {
+        return STATUS_LABELS.find(s =>
+            new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000
+        )?.name || "Lost";
+    };
+
+    const getRepeatsLabel = (repeats) => {
+        return REPEATS_LABELS.find(r =>
+            repeats >= r.min && repeats <= r.max
+        )?.name || "Mastered";
+    };
+
+    const timeDiffString = (dateStr) => {
+        const now = new Date();
+        const date = new Date(dateStr);
+        const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+        const diffHours = Math.floor((now - date) / (1000 * 60 * 60)) % 24;
+        const diffMinutes = Math.floor((now - date) / (1000 * 60)) % 60;
+        const diffSeconds = Math.floor((now - date) / 1000) % 60;
+
+        if (diffDays > 0) return `${diffDays}d ${diffHours}h`;
+        if (diffHours > 0) return `${diffHours}h ${diffMinutes}m`;
+        if (diffMinutes > 0) return `${diffMinutes}m ${diffSeconds}s`;
+        return `${diffSeconds}s`;
+    };
+
+    const getSeverity = (label) => {
+        switch (label) {
+            case "word": return "info";
+            case "rule": return "success";
+            case "topic": return "warning";
+            default: return null;
+        }
+    };
+
+    // CRUD Operations
     const addContentRow = async () => {
         if (!content.trim() || !explanation.trim()) {
-            toast.current?.show({
-                severity: "warn",
-                summary: "Validation",
-                detail: "Please fill in all fields",
-                life: 2000
-            });
+            showToast("warn", "Validation", "Please fill in all fields", 2000);
             return;
         }
 
@@ -184,31 +229,16 @@ export default function LearningTable() {
             setRows([newRow, ...rows]);
             setContent("");
             setExplanation("");
-            toast.current?.show({
-                severity: "success",
-                summary: "Success",
-                detail: "Content item added",
-                life: 2000
-            });
+            showToast("success", "Success", "Content item added", 2000);
         } catch (error) {
             console.error('Error adding content:', error);
-            toast.current?.show({
-                severity: "error",
-                summary: "Error",
-                detail: "Failed to add content item",
-                life: 3000
-            });
+            showToast("error", "Error", "Failed to add content item");
         }
     };
 
     const addRequestRow = async () => {
         if (!requestQuery.trim() || !customActionName.trim()) {
-            toast.current?.show({
-                severity: "warn",
-                summary: "Validation",
-                detail: "Please enter action name and query",
-                life: 2000
-            });
+            showToast("warn", "Validation", "Please enter action name and query", 2000);
             return;
         }
 
@@ -232,20 +262,10 @@ export default function LearningTable() {
             await fetchAiQueries();
             setRequestQuery("");
             setCustomActionName("");
-            toast.current?.show({
-                severity: "success",
-                summary: "Success",
-                detail: "Custom AI action added",
-                life: 2000
-            });
+            showToast("success", "Success", "Custom AI action added", 2000);
         } catch (error) {
             console.error('Error adding AI request:', error);
-            toast.current?.show({
-                severity: "error",
-                summary: "Error",
-                detail: "Failed to add custom AI action",
-                life: 3000
-            });
+            showToast("error", "Error", "Failed to add custom AI action");
         }
     };
 
@@ -259,20 +279,10 @@ export default function LearningTable() {
             if (error) throw error;
 
             await fetchAiQueries();
-            toast.current?.show({
-                severity: "info",
-                summary: "Deleted",
-                detail: "Custom action removed",
-                life: 1500
-            });
+            showToast("info", "Deleted", "Custom action removed", 1500);
         } catch (error) {
             console.error('Error deleting custom action:', error);
-            toast.current?.show({
-                severity: "error",
-                summary: "Error",
-                detail: "Failed to delete action",
-                life: 3000
-            });
+            showToast("error", "Error", "Failed to delete action");
         }
     };
 
@@ -286,275 +296,57 @@ export default function LearningTable() {
             if (error) throw error;
 
             setRows(rows.filter(r => r.id !== rowData.id));
-            toast.current?.show({
-                severity: "info",
-                summary: "Deleted",
-                detail: `Item removed`,
-                life: 1500
-            });
+            showToast("info", "Deleted", "Item removed", 1500);
         } catch (error) {
             console.error('Error deleting row:', error);
-            toast.current?.show({
-                severity: "error",
-                summary: "Error",
-                detail: "Failed to delete item",
-                life: 3000
-            });
+            showToast("error", "Error", "Failed to delete item");
         }
     };
 
-    const openAiChat = (row, actionKey) => {
-        const queryTemplate = aiQueries[row.label]?.[actionKey] || '';
-        const filledQuery = queryTemplate
-            .replace(/{content}/g, row.content)
-            .replace(/{explanation}/g, row.explanation);
-
-        const params = new URLSearchParams({
-            content: row.content,
-            explanation: row.explanation,
-            action: actionKey,
-            query: filledQuery
-        });
-        window.open(`https://example.com/ai-chat?${params.toString()}`, "_blank");
-    };
-
-    const openGame = (row, game) => {
-        alert(`Open game '${game}' for:\n\nContent: ${row.content}\nExplanation: ${row.explanation}`);
-    };
-
-    const getSeverity = (label) => {
-        switch (label) {
-            case "word": return "info";
-            case "rule": return "success";
-            case "topic": return "warning";
-            default: return null;
-        }
-    };
-
-    const orderBody = (rowData) => rows.findIndex(r => r.id === rowData.id) + 1;
-
-    const labelBody = (rowData) => {
-        const color = LABELS.find(l => l.value === rowData.label)?.color || "#000";
-        return <Tag value={rowData.label} severity={getSeverity(rowData.label)} style={{ backgroundColor: color, color: "white" }} />;
-    };
-
-    const timeDiffString = (dateStr) => {
+    const incrementRepeats = async (rowData) => {
         const now = new Date();
-        const date = new Date(dateStr);
-        const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-        const diffHours = Math.floor((now - date) / (1000 * 60 * 60)) % 24;
-        const diffMinutes = Math.floor((now - date) / (1000 * 60)) % 60;
-        const diffSeconds = Math.floor((now - date) / 1000) % 60;
-        if (diffDays > 0) return `${diffDays}d ${diffHours}h`;
-        if (diffHours > 0) return `${diffHours}h ${diffMinutes}m`;
-        if (diffMinutes > 0) return `${diffMinutes}m ${diffSeconds}s`;
-        return `${diffSeconds}s`;
-    };
+        const lastIncrement = rowData.last_increment ? new Date(rowData.last_increment) : null;
 
-    const statusBodyTemplate = (rowData) => {
-        const index = STATUS_LABELS.findIndex(s => s.name === rowData.statusLabel);
-        return (
-            <span style={{ padding: '5px 10px', borderRadius: '4px', color: 'white', backgroundColor: STATUS_LABELS[index]?.color, fontWeight: 'bold' }}>
-                {timeDiffString(rowData.last_repeat_date)}
-            </span>
-        );
-    };
-
-    const statusFilterTemplate = (options) => (
-        <div style={{ position: 'relative' }}>
-            <Dropdown
-                value={options.value}
-                options={STATUS_LABELS.map(s => ({ label: s.name, value: s.name }))}
-                optionLabel="label"
-                placeholder="Select Status"
-                onChange={(e) => options.filterApplyCallback(e.value)}
-                itemTemplate={(option) => (
-                    <div style={{ backgroundColor: STATUS_LABELS.find(s => s.name === option.value)?.color, color: "white", padding: "4px 8px", borderRadius: 4 }}>
-                        {option.label}
-                    </div>
-                )}
-                style={{ minWidth: "150px" }}
-            />
-            {options.value && (
-                <i
-                    className="pi pi-times"
-                    style={{ position: 'absolute', right: '35px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '0.9rem', color: '#6c757d' }}
-                    onClick={() => options.filterApplyCallback(null)}
-                />
-            )}
-        </div>
-    );
-
-    const quantityBodyTemplate = (rowData) => {
-        const label = REPEATS_LABELS.find(r => rowData.number_of_repeats >= r.min && rowData.number_of_repeats <= r.max)?.name || "Mastered";
-        const index = REPEATS_LABELS.findIndex(r => r.name === label);
-        return (
-            <span onClick={async () => {
-                const now = new Date();
-                const lastIncrement = rowData.last_increment ? new Date(rowData.last_increment) : null;
-                if (lastIncrement && now - lastIncrement < 15 * 60 * 1000) {
-                    toast.current?.show({ severity: "warn", summary: "Too Soon", detail: "Increment once every 15 min", life: 2000 });
-                    return;
-                }
-                if (window.confirm(`Increment repeat count for "${rowData.content}"?`)) {
-                    try {
-                        const newCount = rowData.number_of_repeats + 1;
-                        const { error } = await supabase
-                            .from('learning_items')
-                            .update({
-                                number_of_repeats: newCount,
-                                last_repeat_date: now.toISOString(),
-                                last_increment: now.toISOString(),
-                                updated_at: now.toISOString()
-                            })
-                            .eq('id', rowData.id);
-
-                        if (error) throw error;
-
-                        const updatedRows = rows.map(r =>
-                            r.id === rowData.id
-                                ? {
-                                    ...r,
-                                    number_of_repeats: newCount,
-                                    last_repeat_date: now.toISOString(),
-                                    last_increment: now.toISOString(),
-                                    repeatsLabel: getRepeatsLabel(newCount),
-                                    statusLabel: getStatusLabel(now.toISOString())
-                                }
-                                : r
-                        );
-                        setRows(updatedRows);
-                        toast.current?.show({ severity: "success", summary: "Incremented", detail: `New count: ${newCount}`, life: 1500 });
-                    } catch (error) {
-                        console.error('Error incrementing:', error);
-                        toast.current?.show({ severity: "error", summary: "Error", detail: "Failed to update", life: 3000 });
-                    }
-                }
-            }} style={{ display: 'inline-block', width: 30, height: 30, lineHeight: '30px', borderRadius: '50%', textAlign: 'center', fontWeight: 'bold', cursor: 'pointer', color: 'white', backgroundColor: REPEATS_LABELS[index]?.color }}>
-                {rowData.number_of_repeats}
-            </span>
-        );
-    };
-
-    const quantityFilterTemplate = (options) => (
-        <div style={{ position: 'relative' }}>
-            <Dropdown
-                value={options.value}
-                options={REPEATS_LABELS.map(r => ({ label: r.name, value: r.name }))}
-                optionLabel="label"
-                placeholder="Select Repeats"
-                onChange={(e) => options.filterApplyCallback(e.value)}
-                itemTemplate={(option) => (
-                    <div style={{ backgroundColor: REPEATS_LABELS.find(r => r.name === option.value)?.color, color: "white", padding: "4px 8px", borderRadius: 4 }}>
-                        {option.label}
-                    </div>
-                )}
-                style={{ minWidth: "150px" }}
-            />
-            {options.value && (
-                <i
-                    className="pi pi-times"
-                    style={{ position: 'absolute', right: '35px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '0.9rem', color: '#6c757d' }}
-                    onClick={() => options.filterApplyCallback(null)}
-                />
-            )}
-        </div>
-    );
-
-    const labelFilterTemplate = (options) => (
-        <div style={{ position: 'relative' }}>
-            <Dropdown
-                value={options.value}
-                options={LABELS}
-                optionLabel="label"
-                optionValue="value"
-                placeholder="Select Label"
-                onChange={(e) => options.filterApplyCallback(e.value)}
-                itemTemplate={(option) => (
-                    <div style={{ backgroundColor: option.color || "#fff", color: "white", padding: "4px 8px", borderRadius: 4 }}>
-                        {option.label}
-                    </div>
-                )}
-                style={{ minWidth: "150px" }}
-            />
-            {options.value && (
-                <i
-                    className="pi pi-times"
-                    style={{ position: 'absolute', right: '35px', top: '50%', transform: 'translateY(-50%)', cursor: 'pointer', fontSize: '0.9rem', color: '#6c757d' }}
-                    onClick={() => options.filterApplyCallback(null)}
-                />
-            )}
-        </div>
-    );
-
-    const getStatusLabel = (dateStr) => STATUS_LABELS.find(s => new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000)?.name || "Lost";
-    const getRepeatsLabel = (repeats) => REPEATS_LABELS.find(r => repeats >= r.min && repeats <= r.max)?.name || "Mastered";
-
-    const statusSortFunction = (event) => {
-        const order = event.order;
-        return [...event.data].sort((a, b) => {
-            const diffA = new Date() - new Date(a.last_repeat_date);
-            const diffB = new Date() - new Date(b.last_repeat_date);
-            return order * (diffA - diffB);
-        });
-    };
-
-    const repeatsSortFunction = (event) => {
-        const data = [...event.data];
-        const order = event.order;
-        data.sort((a, b) => {
-            const aIndex = REPEATS_LABELS.findIndex(r => r.name === a.repeatsLabel);
-            const bIndex = REPEATS_LABELS.findIndex(r => r.name === b.repeatsLabel);
-            return order * (aIndex - bIndex);
-        });
-        return data;
-    };
-
-    const menuModel = selectedRow ? [
-        {
-            label: 'AI Actions',
-            items: (defaultActionsByLabel[selectedRow.label] || [])
-                .filter(act => act.type === "ai")
-                .map(act => ({
-                    label: act.text,
-                    command: () => openAiChat(selectedRow, act.key)
-                }))
-        },
-        {
-            label: 'Custom AI Actions',
-            items: (customAiActions[selectedRow.label] || []).length > 0
-                ? customAiActions[selectedRow.label].map(act => ({
-                    label: act.text,
-                    icon: 'pi pi-trash',
-                    command: () => deleteCustomAiAction(act.id, selectedRow.label)
-                }))
-                : [{ label: 'No custom actions', disabled: true }]
-        },
-        { separator: true },
-        {
-            label: 'Game Actions',
-            items: (defaultActionsByLabel[selectedRow.label] || [])
-                .filter(act => act.type === "game")
-                .map(act => ({
-                    label: act.text,
-                    icon: 'pi pi-play',
-                    command: () => openGame(selectedRow, act.game)
-                }))
-        },
-        { separator: true },
-        {
-            label: 'Edit',
-            icon: 'pi pi-pencil',
-            command: () => {
-                setEditingRows({ [selectedRow.id]: true });
-            }
-        },
-        {
-            label: 'Delete',
-            icon: 'pi pi-trash',
-            command: () => deleteRow(selectedRow)
+        if (lastIncrement && now - lastIncrement < 15 * 60 * 1000) {
+            showToast("warn", "Too Soon", "Increment once every 15 min", 2000);
+            return;
         }
-    ] : [];
+
+        if (window.confirm(`Increment repeat count for "${rowData.content}"?`)) {
+            try {
+                const newCount = rowData.number_of_repeats + 1;
+                const { error } = await supabase
+                    .from('learning_items')
+                    .update({
+                        number_of_repeats: newCount,
+                        last_repeat_date: now.toISOString(),
+                        last_increment: now.toISOString(),
+                        updated_at: now.toISOString()
+                    })
+                    .eq('id', rowData.id);
+
+                if (error) throw error;
+
+                const updatedRows = rows.map(r =>
+                    r.id === rowData.id
+                        ? {
+                            ...r,
+                            number_of_repeats: newCount,
+                            last_repeat_date: now.toISOString(),
+                            last_increment: now.toISOString(),
+                            repeatsLabel: getRepeatsLabel(newCount),
+                            statusLabel: getStatusLabel(now.toISOString())
+                        }
+                        : r
+                );
+                setRows(updatedRows);
+                showToast("success", "Incremented", `New count: ${newCount}`, 1500);
+            } catch (error) {
+                console.error('Error incrementing:', error);
+                showToast("error", "Error", "Failed to update");
+            }
+        }
+    };
 
     const onRowEditComplete = async (e) => {
         const { newData, index } = e;
@@ -575,29 +367,211 @@ export default function LearningTable() {
             _rows[index] = newData;
             setRows(_rows);
 
-            toast.current?.show({
-                severity: "success",
-                summary: "Updated",
-                detail: "Item updated successfully",
-                life: 1500
-            });
+            showToast("success", "Updated", "Item updated successfully", 1500);
         } catch (error) {
             console.error('Error updating row:', error);
-            toast.current?.show({
-                severity: "error",
-                summary: "Error",
-                detail: "Failed to update item",
-                life: 3000
-            });
+            showToast("error", "Error", "Failed to update item");
         }
     };
 
-    const textEditor = (options, field) => (
-        <InputText
-            value={options.value}
-            onChange={(e) => options.editorCallback({ ...options.rowData, [field]: e.target.value })}
-            autoFocus
-        />
+    // Actions
+    const openAiChat = (row, actionKey) => {
+        const queryTemplate = aiQueries[row.label]?.[actionKey] || '';
+        const filledQuery = queryTemplate
+            .replace(/{content}/g, row.content)
+            .replace(/{explanation}/g, row.explanation);
+
+        const params = new URLSearchParams({
+            content: row.content,
+            explanation: row.explanation,
+            action: actionKey,
+            query: filledQuery
+        });
+        window.open(`https://example.com/ai-chat?${params.toString()}`, "_blank");
+    };
+
+    const openGame = (row, game) => {
+        const combined = `${row.content} - ${row.explanation}`;
+
+        setGameModalData({
+            ...row,
+            combinedText: combined
+        });
+
+        setGameModalVisible(true);
+    };
+
+
+    // Column Templates
+    const orderBody = (rowData) => rows.findIndex(r => r.id === rowData.id) + 1;
+
+    const labelBody = (rowData) => {
+        const color = LABELS.find(l => l.value === rowData.label)?.color || "#000";
+        return (
+            <Tag
+                value={rowData.label}
+                severity={getSeverity(rowData.label)}
+                style={{ backgroundColor: color, color: "white" }}
+            />
+        );
+    };
+
+    const statusBodyTemplate = (rowData) => {
+        const statusConfig = STATUS_LABELS.find(s => s.name === rowData.statusLabel);
+        return (
+            <span style={{
+                padding: '5px 10px',
+                borderRadius: '4px',
+                color: 'white',
+                backgroundColor: statusConfig?.color,
+                fontWeight: 'bold'
+            }}>
+                {timeDiffString(rowData.last_repeat_date)}
+            </span>
+        );
+    };
+
+    const quantityBodyTemplate = (rowData) => {
+        const label = REPEATS_LABELS.find(r =>
+            rowData.number_of_repeats >= r.min && rowData.number_of_repeats <= r.max
+        )?.name || "Mastered";
+        const repeatsConfig = REPEATS_LABELS.find(r => r.name === label);
+
+        return (
+            <span
+                onClick={() => incrementRepeats(rowData)}
+                style={{
+                    display: 'inline-block',
+                    width: 30,
+                    height: 30,
+                    lineHeight: '30px',
+                    borderRadius: '50%',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    color: 'white',
+                    backgroundColor: repeatsConfig?.color
+                }}
+            >
+                {rowData.number_of_repeats}
+            </span>
+        );
+    };
+
+    // Filter Templates
+    const statusFilterTemplate = (options) => (
+        <div style={{ position: 'relative' }}>
+            <Dropdown
+                value={options.value}
+                options={STATUS_LABELS.map(s => ({ label: s.name, value: s.name }))}
+                optionLabel="label"
+                placeholder="Select Status"
+                onChange={(e) => options.filterApplyCallback(e.value)}
+                itemTemplate={(option) => (
+                    <div style={{
+                        backgroundColor: STATUS_LABELS.find(s => s.name === option.value)?.color,
+                        color: "white",
+                        padding: "4px 8px",
+                        borderRadius: 4
+                    }}>
+                        {option.label}
+                    </div>
+                )}
+                style={{ minWidth: "150px" }}
+            />
+            {options.value && (
+                <i
+                    className="pi pi-times"
+                    style={{
+                        position: 'absolute',
+                        right: '35px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        color: '#6c757d'
+                    }}
+                    onClick={() => options.filterApplyCallback(null)}
+                />
+            )}
+        </div>
+    );
+
+    const quantityFilterTemplate = (options) => (
+        <div style={{ position: 'relative' }}>
+            <Dropdown
+                value={options.value}
+                options={REPEATS_LABELS.map(r => ({ label: r.name, value: r.name }))}
+                optionLabel="label"
+                placeholder="Select Repeats"
+                onChange={(e) => options.filterApplyCallback(e.value)}
+                itemTemplate={(option) => (
+                    <div style={{
+                        backgroundColor: REPEATS_LABELS.find(r => r.name === option.value)?.color,
+                        color: "white",
+                        padding: "4px 8px",
+                        borderRadius: 4
+                    }}>
+                        {option.label}
+                    </div>
+                )}
+                style={{ minWidth: "150px" }}
+            />
+            {options.value && (
+                <i
+                    className="pi pi-times"
+                    style={{
+                        position: 'absolute',
+                        right: '35px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        color: '#6c757d'
+                    }}
+                    onClick={() => options.filterApplyCallback(null)}
+                />
+            )}
+        </div>
+    );
+
+    const labelFilterTemplate = (options) => (
+        <div style={{ position: 'relative' }}>
+            <Dropdown
+                value={options.value}
+                options={LABELS}
+                optionLabel="label"
+                optionValue="value"
+                placeholder="Select Label"
+                onChange={(e) => options.filterApplyCallback(e.value)}
+                itemTemplate={(option) => (
+                    <div style={{
+                        backgroundColor: option.color || "#fff",
+                        color: "white",
+                        padding: "4px 8px",
+                        borderRadius: 4
+                    }}>
+                        {option.label}
+                    </div>
+                )}
+                style={{ minWidth: "150px" }}
+            />
+            {options.value && (
+                <i
+                    className="pi pi-times"
+                    style={{
+                        position: 'absolute',
+                        right: '35px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        cursor: 'pointer',
+                        fontSize: '0.9rem',
+                        color: '#6c757d'
+                    }}
+                    onClick={() => options.filterApplyCallback(null)}
+                />
+            )}
+        </div>
     );
 
     const textFilterTemplate = (options) => (
@@ -625,10 +599,116 @@ export default function LearningTable() {
         </div>
     );
 
+    const textEditor = (options, field) => (
+        <InputText
+            value={options.value}
+            onChange={(e) => options.editorCallback({ ...options.rowData, [field]: e.target.value })}
+            autoFocus
+        />
+    );
+
+    // Sort Functions
+    const statusSortFunction = (event) => {
+        const order = event.order;
+        return [...event.data].sort((a, b) => {
+            const diffA = new Date() - new Date(a.last_repeat_date);
+            const diffB = new Date() - new Date(b.last_repeat_date);
+            return order * (diffA - diffB);
+        });
+    };
+
+    const repeatsSortFunction = (event) => {
+        const data = [...event.data];
+        const order = event.order;
+        data.sort((a, b) => {
+            const aIndex = REPEATS_LABELS.findIndex(r => r.name === a.repeatsLabel);
+            const bIndex = REPEATS_LABELS.findIndex(r => r.name === b.repeatsLabel);
+            return order * (aIndex - bIndex);
+        });
+        return data;
+    };
+
+    // Context Menu
+    const menuModel = selectedRow ? (() => {
+        const customActions = customAiActions[selectedRow.label] || [];
+
+        // For word label: show game action directly
+        if (selectedRow.label === 'word') {
+            const menu = [
+                {
+                    label: isDesktop ? 'Practice (Typing Trainer)' : 'Practice (Spell Game)',
+                    icon: 'pi pi-play',
+                    command: () => openGame(selectedRow, isDesktop ? 'typing' : 'spell')
+                }
+            ];
+
+            // Add custom actions if they exist
+            if (customActions.length > 0) {
+                customActions.forEach(act => {
+                    menu.push({
+                        label: act.text,
+                        icon: 'pi pi-arrow-right',
+                        items: [
+                            {
+                                label: 'Open',
+                                icon: 'pi pi-external-link',
+                                command: () => openAiChat(selectedRow, act.key)
+                            },
+                            {
+                                label: 'Delete',
+                                icon: 'pi pi-trash',
+                                command: () => {
+                                    if (window.confirm(`Delete custom action "${act.text}"?`)) {
+                                        deleteCustomAiAction(act.id, selectedRow.label);
+                                    }
+                                }
+                            }
+                        ]
+                    });
+                });
+            }
+
+            return menu;
+        }
+
+        // For other labels: only show custom actions if they exist
+        if (customActions.length > 0) {
+            return customActions.map(act => ({
+                label: act.text,
+                icon: 'pi pi-arrow-right',
+                items: [
+                    {
+                        label: 'Open',
+                        icon: 'pi pi-external-link',
+                        command: () => openAiChat(selectedRow, act.key)
+                    },
+                    {
+                        label: 'Delete',
+                        icon: 'pi pi-trash',
+                        command: () => {
+                            if (window.confirm(`Delete custom action "${act.text}"?`)) {
+                                deleteCustomAiAction(act.id, selectedRow.label);
+                            }
+                        }
+                    }
+                ]
+            }));
+        }
+
+        // No custom actions - return empty array (empty context menu)
+        return [{
+            label: 'No actions available',
+            icon: 'pi pi-ban',
+            disabled: true
+        }];
+    })() : [];
+
+    // Loading State
     if (loading) {
         return <div style={{ padding: 20, textAlign: 'center' }}>Loading...</div>;
     }
 
+    // Render
     return (
         <div style={{ padding: '10px', maxWidth: '100%', overflow: 'hidden' }}>
             <Toast ref={toast} />
@@ -667,6 +747,7 @@ export default function LearningTable() {
                 }
             `}</style>
 
+            {/* Add Content and Custom Actions Forms */}
             <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -796,6 +877,7 @@ export default function LearningTable() {
                 })}
             </div>
 
+            {/* DataTable */}
             <div style={{ overflowX: 'auto', width: '100%' }}>
                 <DataTable
                     value={rows}
@@ -817,7 +899,11 @@ export default function LearningTable() {
                     breakpoint="768px"
                     style={{ minWidth: '600px' }}
                 >
-                    <Column header="#" body={orderBody} style={{ width: "3rem", textAlign: "center" }} />
+                    <Column
+                        header="#"
+                        body={orderBody}
+                        style={{ width: "3rem", textAlign: "center" }}
+                    />
                     <Column
                         field="statusLabel"
                         header="Status"
@@ -937,6 +1023,29 @@ export default function LearningTable() {
                     />
                 </DataTable>
             </div>
+
+            {/* Game Modals */}
+            {gameModalVisible && gameModalData && (
+                isDesktop ? (
+                    <TypingTrainerModal
+                        wordData={{ ...gameModalData, content: gameModalData.combinedText }}
+                        visible={gameModalVisible}
+                        onClose={() => {
+                            setGameModalVisible(false);
+                            setGameModalData(null);
+                        }}
+                    />
+                ) : (
+                    <SpellGameModal
+                        spellText={gameModalData.combinedText}
+                        visible={gameModalVisible}
+                        onClose={() => {
+                            setGameModalVisible(false);
+                            setGameModalData(null);
+                        }}
+                    />
+                )
+            )}
         </div>
     );
 }
