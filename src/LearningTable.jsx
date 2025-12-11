@@ -13,23 +13,12 @@ import { supabase } from './supabaseClient';
 import { SpellGameModal } from "./SpellGameModal";
 import { TypingTrainerModal } from "./TypingTrainerModal";
 
+// Constants
 const LABELS = [
     { label: "word", value: "word", color: "#2196F3" },
     { label: "rule", value: "rule", color: "#4CAF50" },
     { label: "topic", value: "topic", color: "#FFC107" },
 ];
-
-const defaultActionsByLabel = {
-    word: [
-        { key: "explain", text: "Explain (AI)", type: "ai" },
-        { key: "practice", text: "Practice (Game)", type: "game", game: "spell" },
-    ],
-    rule: [{ key: "explainRule", text: "Explain Rule (AI)", type: "ai" }],
-    topic: [
-        { key: "discuss", text: "Discuss (AI)", type: "ai" },
-        { key: "practiceTopic", text: "Practice (Game)", type: "game", game: "typing" },
-    ],
-};
 
 const STATUS_LABELS = [
     { name: "Freshly", maxDays: 1, color: "#006400" },
@@ -46,6 +35,42 @@ const REPEATS_LABELS = [
     { name: "Learned", min: 4, max: 5, color: "#FFA500" },
     { name: "Mastered", min: 6, max: Infinity, color: "#006400" },
 ];
+
+// Helper Functions
+const getStatusLabel = (dateStr) => {
+    return STATUS_LABELS.find(s =>
+        new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000
+    )?.name || "Lost";
+};
+
+const getRepeatsLabel = (repeats) => {
+    return REPEATS_LABELS.find(r =>
+        repeats >= r.min && repeats <= r.max
+    )?.name || "Mastered";
+};
+
+const timeDiffString = (dateStr) => {
+    const now = new Date();
+    const date = new Date(dateStr);
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((now - date) / (1000 * 60 * 60)) % 24;
+    const diffMinutes = Math.floor((now - date) / (1000 * 60)) % 60;
+    const diffSeconds = Math.floor((now - date) / 1000) % 60;
+
+    if (diffDays > 0) return `${diffDays}d ${diffHours}h`;
+    if (diffHours > 0) return `${diffHours}h ${diffMinutes}m`;
+    if (diffMinutes > 0) return `${diffMinutes}m ${diffSeconds}s`;
+    return `${diffSeconds}s`;
+};
+
+const getSeverity = (label) => {
+    switch (label) {
+        case "word": return "info";
+        case "rule": return "success";
+        case "topic": return "warning";
+        default: return null;
+    }
+};
 
 export default function LearningTable() {
     // State Management
@@ -136,10 +161,9 @@ export default function LearningTable() {
                 }
                 queriesMap[item.label][item.action_key] = item.query_text;
 
-                const isDefault = defaultActionsByLabel[item.label]?.some(
-                    act => act.key === item.action_key
-                );
-                if (!isDefault) {
+                // Check if it's a custom action (not in default actions)
+                const defaultKeys = ['explain', 'practice', 'explainRule', 'discuss', 'practiceTopic'];
+                if (!defaultKeys.includes(item.action_key)) {
                     customActionsMap[item.label].push({
                         id: item.id,
                         key: item.action_key,
@@ -156,44 +180,9 @@ export default function LearningTable() {
         }
     };
 
-    // Helper Functions
+    // Toast Helper
     const showToast = (severity, summary, detail, life = 3000) => {
         toast.current?.show({ severity, summary, detail, life });
-    };
-
-    const getStatusLabel = (dateStr) => {
-        return STATUS_LABELS.find(s =>
-            new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000
-        )?.name || "Lost";
-    };
-
-    const getRepeatsLabel = (repeats) => {
-        return REPEATS_LABELS.find(r =>
-            repeats >= r.min && repeats <= r.max
-        )?.name || "Mastered";
-    };
-
-    const timeDiffString = (dateStr) => {
-        const now = new Date();
-        const date = new Date(dateStr);
-        const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
-        const diffHours = Math.floor((now - date) / (1000 * 60 * 60)) % 24;
-        const diffMinutes = Math.floor((now - date) / (1000 * 60)) % 60;
-        const diffSeconds = Math.floor((now - date) / 1000) % 60;
-
-        if (diffDays > 0) return `${diffDays}d ${diffHours}h`;
-        if (diffHours > 0) return `${diffHours}h ${diffMinutes}m`;
-        if (diffMinutes > 0) return `${diffMinutes}m ${diffSeconds}s`;
-        return `${diffSeconds}s`;
-    };
-
-    const getSeverity = (label) => {
-        switch (label) {
-            case "word": return "info";
-            case "rule": return "success";
-            case "topic": return "warning";
-            default: return null;
-        }
     };
 
     // CRUD Operations
@@ -287,6 +276,10 @@ export default function LearningTable() {
     };
 
     const deleteRow = async (rowData) => {
+        if (!window.confirm(`Delete "${rowData.content}"?`)) {
+            return;
+        }
+
         try {
             const { error } = await supabase
                 .from('learning_items')
@@ -401,7 +394,6 @@ export default function LearningTable() {
         setGameModalVisible(true);
     };
 
-
     // Column Templates
     const orderBody = (rowData) => rows.findIndex(r => r.id === rowData.id) + 1;
 
@@ -457,6 +449,16 @@ export default function LearningTable() {
             </span>
         );
     };
+
+    // Editor Templates
+    const textEditor = (options) => (
+        <InputText
+            type="text"
+            value={options.value}
+            onChange={(e) => options.editorCallback(e.target.value)}
+            style={{ width: '100%' }}
+        />
+    );
 
     // Filter Templates
     const statusFilterTemplate = (options) => (
@@ -599,14 +601,6 @@ export default function LearningTable() {
         </div>
     );
 
-    const textEditor = (options, field) => (
-        <InputText
-            value={options.value}
-            onChange={(e) => options.editorCallback({ ...options.rowData, [field]: e.target.value })}
-            autoFocus
-        />
-    );
-
     // Sort Functions
     const statusSortFunction = (event) => {
         const order = event.order;
@@ -621,9 +615,8 @@ export default function LearningTable() {
         const data = [...event.data];
         const order = event.order;
         data.sort((a, b) => {
-            const aIndex = REPEATS_LABELS.findIndex(r => r.name === a.repeatsLabel);
-            const bIndex = REPEATS_LABELS.findIndex(r => r.name === b.repeatsLabel);
-            return order * (aIndex - bIndex);
+            // Sort by actual number of repeats, not by label
+            return order * (a.number_of_repeats - b.number_of_repeats);
         });
         return data;
     };
@@ -632,7 +625,6 @@ export default function LearningTable() {
     const menuModel = selectedRow ? (() => {
         const customActions = customAiActions[selectedRow.label] || [];
 
-        // For word label: show game action directly
         if (selectedRow.label === 'word') {
             const menu = [
                 {
@@ -642,7 +634,6 @@ export default function LearningTable() {
                 }
             ];
 
-            // Add custom actions if they exist
             if (customActions.length > 0) {
                 customActions.forEach(act => {
                     menu.push({
@@ -671,7 +662,6 @@ export default function LearningTable() {
             return menu;
         }
 
-        // For other labels: only show custom actions if they exist
         if (customActions.length > 0) {
             return customActions.map(act => ({
                 label: act.text,
@@ -695,7 +685,6 @@ export default function LearningTable() {
             }));
         }
 
-        // No custom actions - return empty array (empty context menu)
         return [{
             label: 'No actions available',
             icon: 'pi pi-ban',
@@ -919,12 +908,12 @@ export default function LearningTable() {
                         style={{ minWidth: "10rem" }}
                     />
                     <Column
-                        field="repeatsLabel"
+                        field="number_of_repeats"
                         header="Repeats"
                         body={quantityBodyTemplate}
                         sortable
-                        sortFunction={repeatsSortFunction}
                         filter
+                        filterField="repeatsLabel"
                         filterElement={quantityFilterTemplate}
                         showFilterMenu={false}
                         showFilterMatchModes={false}
@@ -948,7 +937,7 @@ export default function LearningTable() {
                     <Column
                         field="content"
                         header="Content"
-                        editor={(options) => textEditor(options, "content")}
+                        editor={textEditor}
                         filter
                         filterElement={(options) => textFilterTemplate({ ...options, filterPlaceholder: "Search content" })}
                         showFilterMenu={false}
@@ -960,7 +949,7 @@ export default function LearningTable() {
                     <Column
                         field="explanation"
                         header="Explanation"
-                        editor={(options) => textEditor(options, "explanation")}
+                        editor={textEditor}
                         filter
                         filterElement={(options) => textFilterTemplate({ ...options, filterPlaceholder: "Search explanation" })}
                         showFilterMenu={false}
@@ -973,53 +962,19 @@ export default function LearningTable() {
                         rowEditor
                         headerStyle={{ width: "7rem", minWidth: "6rem" }}
                         bodyStyle={{ textAlign: "center" }}
-                        body={(rowData) => {
-                            const isEditing = editingRows[rowData.id];
-                            if (isEditing) {
-                                return (
-                                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                                        <Button
-                                            icon="pi pi-check"
-                                            className="p-button-text p-button-success"
-                                            onClick={(e) => {
-                                                const saveEvent = {
-                                                    originalEvent: e,
-                                                    data: rowData,
-                                                    newData: rowData,
-                                                    index: rows.findIndex(r => r.id === rowData.id)
-                                                };
-                                                onRowEditComplete(saveEvent);
-                                                setEditingRows({});
-                                            }}
-                                        />
-                                        <Button
-                                            icon="pi pi-times"
-                                            className="p-button-text p-button-danger"
-                                            onClick={() => setEditingRows({})}
-                                        />
-                                        <Button
-                                            icon="pi pi-trash"
-                                            className="p-button-text p-button-danger"
-                                            onClick={() => deleteRow(rowData)}
-                                        />
-                                    </div>
-                                );
-                            }
-                            return (
-                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                                    <Button
-                                        icon="pi pi-pencil"
-                                        className="p-button-text"
-                                        onClick={() => setEditingRows({ [rowData.id]: true })}
-                                    />
-                                    <Button
-                                        icon="pi pi-trash"
-                                        className="p-button-text p-button-danger"
-                                        onClick={() => deleteRow(rowData)}
-                                    />
-                                </div>
-                            );
-                        }}
+                    />
+                    <Column
+                        body={(rowData) => (
+                            <Button
+                                icon="pi pi-trash"
+                                className="p-button-text p-button-danger"
+                                onClick={() => deleteRow(rowData)}
+                                tooltip="Delete"
+                                tooltipOptions={{ position: 'top' }}
+                            />
+                        )}
+                        headerStyle={{ width: "5rem", minWidth: "4rem" }}
+                        bodyStyle={{ textAlign: "center" }}
                     />
                 </DataTable>
             </div>
