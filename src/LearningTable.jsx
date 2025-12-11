@@ -9,11 +9,11 @@ import { Toast } from "primereact/toast";
 import { ContextMenu } from "primereact/contextmenu";
 import { FilterMatchMode } from 'primereact/api';
 import { SelectButton } from "primereact/selectbutton";
+import { Dialog } from "primereact/dialog";
 import { supabase } from './supabaseClient';
 import { SpellGameModal } from "./SpellGameModal";
 import { TypingTrainerModal } from "./TypingTrainerModal";
 
-// Constants
 const LABELS = [
     { label: "word", value: "word", color: "#2196F3" },
     { label: "rule", value: "rule", color: "#4CAF50" },
@@ -36,7 +36,6 @@ const REPEATS_LABELS = [
     { name: "Mastered", min: 6, max: Infinity, color: "#006400" },
 ];
 
-// Helper Functions
 const getStatusLabel = (dateStr) => {
     return STATUS_LABELS.find(s =>
         new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000
@@ -72,8 +71,31 @@ const getSeverity = (label) => {
     }
 };
 
+const isImageUrl = (text) => {
+    if (!text || typeof text !== 'string') return false;
+    const trimmedText = text.trim();
+    const urlPattern = /^(https?:\/\/)/i;
+
+    if (!urlPattern.test(trimmedText)) return false;
+
+    const imagePattern = /\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?[^?\s]*)?$/i;
+    if (imagePattern.test(trimmedText)) return true;
+
+    const imageHostPatterns = [
+        /imgur\.com/i,
+        /\.(jpg|jpeg|png|gif|bmp|webp|svg)$/i
+    ];
+
+    return imageHostPatterns.some(pattern => pattern.test(trimmedText));
+};
+
+const isHtmlContent = (text) => {
+    if (!text || typeof text !== 'string') return false;
+    const htmlPattern = /<[^>]+>/;
+    return htmlPattern.test(text);
+};
+
 export default function LearningTable() {
-    // State Management
     const [rows, setRows] = useState([]);
     const [editingRows, setEditingRows] = useState({});
     const [filters, setFilters] = useState({
@@ -87,25 +109,24 @@ export default function LearningTable() {
     const [loading, setLoading] = useState(true);
     const [aiQueries, setAiQueries] = useState({});
     const [customAiActions, setCustomAiActions] = useState({});
-
-    // Form State
     const [labelToAdd, setLabelToAdd] = useState(LABELS[0].value);
     const [labelForRequest, setLabelForRequest] = useState(LABELS[0].value);
     const [content, setContent] = useState("");
     const [explanation, setExplanation] = useState("");
     const [requestQuery, setRequestQuery] = useState("");
     const [customActionName, setCustomActionName] = useState("");
-
-    // Game Modal State
     const [gameModalVisible, setGameModalVisible] = useState(false);
     const [gameModalData, setGameModalData] = useState(null);
     const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+    const [imageModalVisible, setImageModalVisible] = useState(false);
+    const [currentImage, setCurrentImage] = useState(null);
+    const [imageError, setImageError] = useState(false);
+    const [tableModalVisible, setTableModalVisible] = useState(false);
+    const [currentTableHtml, setCurrentTableHtml] = useState(null);
 
-    // Refs
     const toast = useRef(null);
     const cm = useRef(null);
 
-    // Effects
     useEffect(() => {
         fetchData();
         fetchAiQueries();
@@ -117,7 +138,6 @@ export default function LearningTable() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Data Fetching
     const fetchData = async () => {
         try {
             setLoading(true);
@@ -161,7 +181,6 @@ export default function LearningTable() {
                 }
                 queriesMap[item.label][item.action_key] = item.query_text;
 
-                // Check if it's a custom action (not in default actions)
                 const defaultKeys = ['explain', 'practice', 'explainRule', 'discuss', 'practiceTopic'];
                 if (!defaultKeys.includes(item.action_key)) {
                     customActionsMap[item.label].push({
@@ -180,12 +199,10 @@ export default function LearningTable() {
         }
     };
 
-    // Toast Helper
     const showToast = (severity, summary, detail, life = 3000) => {
         toast.current?.show({ severity, summary, detail, life });
     };
 
-    // CRUD Operations
     const addContentRow = async () => {
         if (!content.trim() || !explanation.trim()) {
             showToast("warn", "Validation", "Please fill in all fields", 2000);
@@ -367,20 +384,19 @@ export default function LearningTable() {
         }
     };
 
-    // Actions
-    const openAiChat = (row, actionKey) => {
-        const queryTemplate = aiQueries[row.label]?.[actionKey] || '';
-        const filledQuery = queryTemplate
-            .replace(/{content}/g, row.content)
-            .replace(/{explanation}/g, row.explanation);
+    const openChatGPT = (content, explanation, actionKey = null) => {
+        let queryText = '';
 
-        const params = new URLSearchParams({
-            content: row.content,
-            explanation: row.explanation,
-            action: actionKey,
-            query: filledQuery
-        });
-        window.open(`https://example.com/ai-chat?${params.toString()}`, "_blank");
+        if (actionKey && aiQueries[selectedRow?.label]?.[actionKey]) {
+            queryText = aiQueries[selectedRow.label][actionKey]
+                .replace(/{content}/g, content)
+                .replace(/{explanation}/g, explanation);
+        } else {
+            queryText = `${content} - ${explanation}`;
+        }
+
+        const chatGPTUrl = `https://chat.openai.com/?q=${encodeURIComponent(queryText)}`;
+        window.open(chatGPTUrl, "_blank");
     };
 
     const openGame = (row, game) => {
@@ -394,7 +410,17 @@ export default function LearningTable() {
         setGameModalVisible(true);
     };
 
-    // Column Templates
+    const openImageModal = (imageUrl) => {
+        setCurrentImage(imageUrl);
+        setImageError(false);
+        setImageModalVisible(true);
+    };
+
+    const openTableModal = (htmlContent) => {
+        setCurrentTableHtml(htmlContent);
+        setTableModalVisible(true);
+    };
+
     const orderBody = (rowData) => rows.findIndex(r => r.id === rowData.id) + 1;
 
     const labelBody = (rowData) => {
@@ -430,27 +456,90 @@ export default function LearningTable() {
         const repeatsConfig = REPEATS_LABELS.find(r => r.name === label);
 
         return (
-            <span
-                onClick={() => incrementRepeats(rowData)}
-                style={{
-                    display: 'inline-block',
-                    width: 30,
-                    height: 30,
-                    lineHeight: '30px',
-                    borderRadius: '50%',
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    cursor: 'pointer',
-                    color: 'white',
-                    backgroundColor: repeatsConfig?.color
-                }}
-            >
-                {rowData.number_of_repeats}
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                <span
+                    style={{
+                        display: 'inline-block',
+                        width: 30,
+                        height: 30,
+                        lineHeight: '30px',
+                        borderRadius: '50%',
+                        textAlign: 'center',
+                        fontWeight: 'bold',
+                        color: 'white',
+                        backgroundColor: repeatsConfig?.color
+                    }}
+                >
+                    {rowData.number_of_repeats}
+                </span>
+                <Button
+                    label="++"
+                    onClick={() => incrementRepeats(rowData)}
+                    size="small"
+                    style={{
+                        padding: '4px 8px',
+                        fontSize: '0.75rem',
+                        minWidth: 'auto',
+                        backgroundColor: repeatsConfig?.color,
+                        borderColor: repeatsConfig?.color,
+                        color: 'white'
+                    }}
+                />
+            </div>
         );
     };
 
-    // Editor Templates
+    const contentBodyTemplate = (rowData) => {
+        return (
+            <div
+                onClick={() => openChatGPT(rowData.content, rowData.explanation)}
+                style={{ cursor: 'pointer', color: '#2196F3', textDecoration: 'underline' }}
+            >
+                {rowData.content}
+            </div>
+        );
+    };
+
+    const explanationBodyTemplate = (rowData) => {
+        const text = rowData.explanation || '';
+
+        if (isImageUrl(text)) {
+            return (
+                <img
+                    src={text.trim()}
+                    alt="Explanation"
+                    style={{
+                        maxWidth: '200px',
+                        maxHeight: '100px',
+                        cursor: 'pointer',
+                        objectFit: 'contain'
+                    }}
+                    onClick={() => openImageModal(text.trim())}
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentNode.innerHTML = '<span style="color: red;">Image cannot be reached</span>';
+                    }}
+                />
+            );
+        }
+
+        if (isHtmlContent(text)) {
+            return (
+                <Button
+                    label="Open Rule"
+                    size="small"
+                    onClick={() => openTableModal(text)}
+                    style={{
+                        padding: '6px 12px',
+                        fontSize: '0.875rem'
+                    }}
+                />
+            );
+        }
+
+        return <b>{text}</b>;
+    };
+
     const textEditor = (options) => (
         <InputText
             type="text"
@@ -460,7 +549,6 @@ export default function LearningTable() {
         />
     );
 
-    // Filter Templates
     const statusFilterTemplate = (options) => (
         <div style={{ position: 'relative' }}>
             <Dropdown
@@ -601,7 +689,6 @@ export default function LearningTable() {
         </div>
     );
 
-    // Sort Functions
     const statusSortFunction = (event) => {
         const order = event.order;
         return [...event.data].sort((a, b) => {
@@ -615,13 +702,11 @@ export default function LearningTable() {
         const data = [...event.data];
         const order = event.order;
         data.sort((a, b) => {
-            // Sort by actual number of repeats, not by label
             return order * (a.number_of_repeats - b.number_of_repeats);
         });
         return data;
     };
 
-    // Context Menu
     const menuModel = selectedRow ? (() => {
         const customActions = customAiActions[selectedRow.label] || [];
 
@@ -643,7 +728,7 @@ export default function LearningTable() {
                             {
                                 label: 'Open',
                                 icon: 'pi pi-external-link',
-                                command: () => openAiChat(selectedRow, act.key)
+                                command: () => openChatGPT(selectedRow.content, selectedRow.explanation, act.key)
                             },
                             {
                                 label: 'Delete',
@@ -670,7 +755,7 @@ export default function LearningTable() {
                     {
                         label: 'Open',
                         icon: 'pi pi-external-link',
-                        command: () => openAiChat(selectedRow, act.key)
+                        command: () => openChatGPT(selectedRow.content, selectedRow.explanation, act.key)
                     },
                     {
                         label: 'Delete',
@@ -692,12 +777,10 @@ export default function LearningTable() {
         }];
     })() : [];
 
-    // Loading State
     if (loading) {
         return <div style={{ padding: 20, textAlign: 'center' }}>Loading...</div>;
     }
 
-    // Render
     return (
         <div style={{ padding: '10px', maxWidth: '100%', overflow: 'hidden' }}>
             <Toast ref={toast} />
@@ -736,7 +819,6 @@ export default function LearningTable() {
                 }
             `}</style>
 
-            {/* Add Content and Custom Actions Forms */}
             <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -866,7 +948,6 @@ export default function LearningTable() {
                 })}
             </div>
 
-            {/* DataTable */}
             <div style={{ overflowX: 'auto', width: '100%' }}>
                 <DataTable
                     value={rows}
@@ -937,6 +1018,7 @@ export default function LearningTable() {
                     <Column
                         field="content"
                         header="Content"
+                        body={contentBodyTemplate}
                         editor={textEditor}
                         filter
                         filterElement={(options) => textFilterTemplate({ ...options, filterPlaceholder: "Search content" })}
@@ -949,6 +1031,7 @@ export default function LearningTable() {
                     <Column
                         field="explanation"
                         header="Explanation"
+                        body={explanationBodyTemplate}
                         editor={textEditor}
                         filter
                         filterElement={(options) => textFilterTemplate({ ...options, filterPlaceholder: "Search explanation" })}
@@ -979,7 +1062,6 @@ export default function LearningTable() {
                 </DataTable>
             </div>
 
-            {/* Game Modals */}
             {gameModalVisible && gameModalData && (
                 isDesktop ? (
                     <TypingTrainerModal
@@ -1001,6 +1083,90 @@ export default function LearningTable() {
                     />
                 )
             )}
+
+            <Dialog
+                header="Image Viewer"
+                visible={imageModalVisible}
+                style={{ width: '80vw', maxWidth: '800px' }}
+                onHide={() => setImageModalVisible(false)}
+                modal
+            >
+                {imageError ? (
+                    <div style={{
+                        padding: '2rem',
+                        textAlign: 'center',
+                        color: 'red',
+                        fontSize: '1.1rem'
+                    }}>
+                        Image cannot be reached
+                    </div>
+                ) : (
+                    <img
+                        src={currentImage}
+                        alt="Full size"
+                        style={{
+                            width: '100%',
+                            height: 'auto',
+                            maxHeight: '70vh',
+                            objectFit: 'contain'
+                        }}
+                        onError={() => setImageError(true)}
+                    />
+                )}
+            </Dialog>
+
+            <Dialog
+                header="Rule Viewer"
+                visible={tableModalVisible}
+                style={{ width: '90vw', maxWidth: '1200px' }}
+                onHide={() => setTableModalVisible(false)}
+                modal
+                contentStyle={{
+                    padding: '1rem',
+                    overflowX: 'auto',
+                    maxHeight: '70vh'
+                }}
+            >
+                <style>{`
+                    .p-dialog .p-dialog-content table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 0.9rem;
+                    }
+                    .p-dialog .p-dialog-content table td,
+                    .p-dialog .p-dialog-content table th {
+                        padding: 8px;
+                        border: 1px solid #ddd;
+                        text-align: left;
+                    }
+                    .p-dialog .p-dialog-content table th {
+                        background-color: #f5f5f5;
+                        font-weight: bold;
+                    }
+                    @media (max-width: 768px) {
+                        .p-dialog .p-dialog-content table {
+                            font-size: 0.8rem;
+                        }
+                        .p-dialog .p-dialog-content table td,
+                        .p-dialog .p-dialog-content table th {
+                            padding: 6px;
+                        }
+                    }
+                    @media (max-width: 480px) {
+                        .p-dialog .p-dialog-content table {
+                            font-size: 0.7rem;
+                            display: block;
+                            overflow-x: auto;
+                        }
+                        .p-dialog .p-dialog-content table td,
+                        .p-dialog .p-dialog-content table th {
+                            padding: 4px;
+                            white-space: nowrap;
+                        }
+                    }
+                `}</style>
+                <div dangerouslySetInnerHTML={{ __html: currentTableHtml }} />
+            </Dialog>
         </div>
     );
 }
