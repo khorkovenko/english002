@@ -241,7 +241,14 @@ export default function LearningTable() {
     };
 
     const openQuickButtonChatGPT = (query) => {
-        window.open(`https://chat.openai.com/?q=${encodeURIComponent(query)}`, "_blank");
+        if (!content.trim()) {
+            showToast("warn", "Missing Content", "Enter a word or phrase before using Quick Actions");
+            return;
+        }
+
+        const queryText = `${content.trim()} - ${query.trim()}`;
+
+        window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
     };
 
     const deleteCustomAiAction = async (actionId) => {
@@ -495,8 +502,15 @@ export default function LearningTable() {
 
                 <div style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '0.75rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' }}>
                     <h2 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.75rem', color: '#1f2937' }}>Quick ChatGPT Buttons</h2>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
-                        <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '150px' }}>
+                    <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.75rem',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginBottom: '1rem'
+                    }}>
+                    <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '150px' }}>
                             <InputText placeholder="Button name" value={newButtonName} onChange={(e) => setNewButtonName(e.target.value)} style={{ width: '100%', paddingRight: '2rem' }} />
                             {newButtonName && <button onClick={() => setNewButtonName("")} style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", color: "#777", background: "transparent", border: "none", cursor: "pointer", fontSize: "14px" }}>✕</button>}
                         </div>
@@ -509,7 +523,11 @@ export default function LearningTable() {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                         {quickButtons.map((btn) => (
                             <div key={btn.id} style={{ position: 'relative', display: 'inline-block' }}>
-                                <Button label={btn.name} onClick={() => openQuickButtonChatGPT(btn.query)} style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', paddingRight: '2rem' }} />
+                                <Button
+                                    label={btn.name}
+                                    onClick={() => openQuickButtonChatGPT(btn.query)}
+                                    style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', paddingRight: '2rem' }}
+                                />
                                 <button onClick={() => { if (window.confirm(`Delete button "${btn.name}"?`)) deleteQuickButton(btn.id); }} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: 'white', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>×</button>
                             </div>
                         ))}
