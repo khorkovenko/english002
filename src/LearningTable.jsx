@@ -88,6 +88,9 @@ export default function LearningTable() {
     const [imageError, setImageError] = useState(false);
     const [tableModalVisible, setTableModalVisible] = useState(false);
     const [currentTableHtml, setCurrentTableHtml] = useState("");
+    const [quickButtons, setQuickButtons] = useState([]);
+    const [newButtonName, setNewButtonName] = useState("");
+    const [newButtonQuery, setNewButtonQuery] = useState("");
 
     const toast = useRef(null);
     const cm = useRef(null);
@@ -95,6 +98,7 @@ export default function LearningTable() {
     useEffect(() => {
         fetchData();
         fetchAiQueries();
+        fetchQuickButtons();
         const handleResize = () => setIsDesktop(window.innerWidth >= 768);
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
@@ -139,6 +143,16 @@ export default function LearningTable() {
             setCustomAiActions(customActionsMap);
         } catch (error) {
             console.error('Error fetching AI queries:', error);
+        }
+    };
+
+    const fetchQuickButtons = async () => {
+        try {
+            const { data, error } = await supabase.from('quick_buttons').select('*').order('created_at', { ascending: true });
+            if (error) throw error;
+            setQuickButtons(data || []);
+        } catch (error) {
+            console.error('Error fetching quick buttons:', error);
         }
     };
 
@@ -191,6 +205,43 @@ export default function LearningTable() {
             console.error('Error adding AI request:', error);
             showToast("error", "Error", "Failed to add custom AI action");
         }
+    };
+
+    const addQuickButton = async () => {
+        if (!newButtonName.trim() || !newButtonQuery.trim()) {
+            showToast("warn", "Validation", "Please fill button name and query", 2000);
+            return;
+        }
+        try {
+            const { data, error } = await supabase.from('quick_buttons').insert([{
+                name: newButtonName.trim(),
+                query: newButtonQuery.trim(),
+            }]).select().single();
+            if (error) throw error;
+            setQuickButtons([...quickButtons, data]);
+            setNewButtonName("");
+            setNewButtonQuery("");
+            showToast("success", "Success", "Quick button added", 2000);
+        } catch (error) {
+            console.error('Error adding quick button:', error);
+            showToast("error", "Error", "Failed to add quick button");
+        }
+    };
+
+    const deleteQuickButton = async (id) => {
+        try {
+            const { error } = await supabase.from('quick_buttons').delete().eq('id', id);
+            if (error) throw error;
+            setQuickButtons(quickButtons.filter(b => b.id !== id));
+            showToast("info", "Deleted", "Quick button removed", 1500);
+        } catch (error) {
+            console.error('Error deleting quick button:', error);
+            showToast("error", "Error", "Failed to delete button");
+        }
+    };
+
+    const openQuickButtonChatGPT = (query) => {
+        window.open(`https://chat.openai.com/?q=${encodeURIComponent(query)}`, "_blank");
     };
 
     const deleteCustomAiAction = async (actionId) => {
@@ -441,6 +492,30 @@ export default function LearningTable() {
                         </div>
                     );
                 })}
+
+                <div style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '0.75rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' }}>
+                    <h2 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.75rem', color: '#1f2937' }}>Quick ChatGPT Buttons</h2>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem' }}>
+                        <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '150px' }}>
+                            <InputText placeholder="Button name" value={newButtonName} onChange={(e) => setNewButtonName(e.target.value)} style={{ width: '100%', paddingRight: '2rem' }} />
+                            {newButtonName && <button onClick={() => setNewButtonName("")} style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", color: "#777", background: "transparent", border: "none", cursor: "pointer", fontSize: "14px" }}>✕</button>}
+                        </div>
+                        <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '150px' }}>
+                            <InputText placeholder="Query text" value={newButtonQuery} onChange={(e) => setNewButtonQuery(e.target.value)} style={{ width: '100%', paddingRight: '2rem' }} />
+                            {newButtonQuery && <button onClick={() => setNewButtonQuery("")} style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", color: "#777", background: "transparent", border: "none", cursor: "pointer", fontSize: "14px" }}>✕</button>}
+                        </div>
+                        <Button icon="pi pi-plus" label="Add Button" onClick={addQuickButton} style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', flexShrink: 0 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        {quickButtons.map((btn) => (
+                            <div key={btn.id} style={{ position: 'relative', display: 'inline-block' }}>
+                                <Button label={btn.name} onClick={() => openQuickButtonChatGPT(btn.query)} style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', paddingRight: '2rem' }} />
+                                <button onClick={() => { if (window.confirm(`Delete button "${btn.name}"?`)) deleteQuickButton(btn.id); }} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: 'white', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>×</button>
+                            </div>
+                        ))}
+                        {quickButtons.length === 0 && <p style={{ color: '#6b7280', fontStyle: 'italic', margin: 0 }}>No quick buttons yet. Add one above!</p>}
+                    </div>
+                </div>
             </div>
 
             <div style={{ overflowX: 'auto', width: '100%' }}>
