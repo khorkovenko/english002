@@ -374,12 +374,55 @@ export default function LearningTable() {
 
     const explanationBodyTemplate = (rowData) => {
         const text = rowData.explanation || '';
+
+        const labelColor =
+            LABELS.find(l => l.value === rowData.label)?.color || "#6b7280";
+
         if (isImageUrl(text)) {
-            return <img src={text.trim()} alt="Explanation" style={{ maxWidth: '200px', maxHeight: '100px', cursor: 'pointer', objectFit: 'contain' }} onClick={() => { setCurrentImage(text.trim()); setImageError(false); setImageModalVisible(true); }} onError={(e) => { e.target.style.display = 'none'; e.target.parentNode.innerHTML = '<span style="color: red;">Image cannot be reached</span>'; }} />;
+            return (
+                <img
+                    src={text.trim()}
+                    alt="Explanation"
+                    style={{
+                        maxWidth: '200px',
+                        maxHeight: '100px',
+                        cursor: 'pointer',
+                        objectFit: 'contain'
+                    }}
+                    onClick={() => {
+                        setCurrentImage(text.trim());
+                        setImageError(false);
+                        setImageModalVisible(true);
+                    }}
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentNode.innerHTML =
+                            '<span style="color: red;">Image cannot be reached</span>';
+                    }}
+                />
+            );
         }
+
         if (isHtmlContent(text)) {
-            return <Button label="Open Rule" size="small" onClick={() => { setCurrentTableHtml(text); setTableModalVisible(true); }} style={{ padding: '6px 12px', fontSize: '0.875rem' }} />;
+            return (
+                <Button
+                    label="Open Rule"
+                    size="small"
+                    onClick={() => {
+                        setCurrentTableHtml(text);
+                        setTableModalVisible(true);
+                    }}
+                    style={{
+                        padding: '6px 12px',
+                        fontSize: '0.875rem',
+                        backgroundColor: labelColor,
+                        borderColor: labelColor,
+                        color: '#fff'
+                    }}
+                />
+            );
         }
+
         return <b>{text}</b>;
     };
 
