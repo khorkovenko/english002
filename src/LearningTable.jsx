@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, {useState, useRef, useEffect, useMemo} from "react";
 import { DataTable } from "primereact/datatable";
 import { Column } from "primereact/column";
 import { InputText } from "primereact/inputtext";
@@ -13,6 +13,7 @@ import { Dialog } from "primereact/dialog";
 import { supabase } from './supabaseClient';
 import { SpellGameModal } from "./SpellGameModal";
 import { TypingTrainerModal } from "./TypingTrainerModal";
+import {ToggleButton} from "primereact/togglebutton";
 
 const LABELS = [
     { label: "word", value: "word", color: "#2196F3" },
@@ -91,6 +92,19 @@ export default function LearningTable() {
     const [quickButtons, setQuickButtons] = useState([]);
     const [newButtonName, setNewButtonName] = useState("");
     const [newButtonQuery, setNewButtonQuery] = useState("");
+    const [showAllItems, setShowAllItems] = useState(true);
+
+    const spacedRepetitionDays = [1, 7, 16, 35];
+
+    const filteredRows = useMemo(() => {
+        if (showAllItems) return rows;
+
+        return rows.filter(row => {
+            const lastRepeat = new Date(row.last_repeat_date);
+            const diffDays = Math.floor((new Date() - lastRepeat) / (1000 * 60 * 60 * 24));
+            return spacedRepetitionDays.some(d => diffDays === d);
+        });
+    }, [rows, showAllItems]);
 
     const toast = useRef(null);
     const cm = useRef(null);
@@ -245,9 +259,7 @@ export default function LearningTable() {
             showToast("warn", "Missing Content", "Enter a word or phrase before using Quick Actions");
             return;
         }
-
         const queryText = `${content.trim()} - ${query.trim()}`;
-
         window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
     };
 
@@ -332,44 +344,22 @@ export default function LearningTable() {
     };
 
     const buildChatGPTQuery = ({ content, explanation, queryTemplate }) => {
-        const isSpecialExplanation =
-            isImageUrl(explanation) || isHtmlContent(explanation);
-
+        const isSpecialExplanation = isImageUrl(explanation) || isHtmlContent(explanation);
         if (!queryTemplate) {
-            return isSpecialExplanation
-                ? `${content}`
-                : `${content} - ${explanation}`;
+            return isSpecialExplanation ? `${content}` : `${content} - ${explanation}`;
         }
-
-        let resolvedQuery = queryTemplate
-            .replace(/{content}/g, content)
-            .replace(/{explanation}/g, explanation || "");
-
-        return isSpecialExplanation
-            ? `${content} | ${resolvedQuery}`
-            : `${content} - ${explanation} | ${resolvedQuery}`;
+        let resolvedQuery = queryTemplate.replace(/{content}/g, content).replace(/{explanation}/g, explanation || "");
+        return isSpecialExplanation ? `${content} | ${resolvedQuery}` : `${content} - ${explanation} | ${resolvedQuery}`;
     };
-
 
     const openChatGPT = (content, explanation, actionKey = null) => {
         let queryTemplate = null;
-
         if (actionKey && aiQueries[selectedRow?.label]?.[actionKey]) {
             queryTemplate = aiQueries[selectedRow.label][actionKey];
         }
-
-        const queryText = buildChatGPTQuery({
-            content,
-            explanation,
-            queryTemplate
-        });
-
-        window.open(
-            `https://chat.openai.com/?q=${encodeURIComponent(queryText)}`,
-            "_blank"
-        );
+        const queryText = buildChatGPTQuery({ content, explanation, queryTemplate });
+        window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
     };
-
 
     const openGame = (row) => {
         setGameModalData({ ...row, combinedText: `${row.content} - ${row.explanation}` });
@@ -399,80 +389,37 @@ export default function LearningTable() {
     };
 
     const contentBodyTemplate = (rowData) => (
-        <div
-            onClick={() => {
-                const queryText = buildChatGPTQuery({
-                    content: rowData.content,
-                    explanation: rowData.explanation,
-                    queryTemplate: null
-                });
-
-                window.open(
-                    `https://chat.openai.com/?q=${encodeURIComponent(queryText)}`,
-                    "_blank"
-                );
-            }}
-            style={{
-                cursor: 'pointer',
-                color: '#2196F3',
-                textDecoration: 'underline'
-            }}
-        >
+        <div onClick={() => {
+            const queryText = buildChatGPTQuery({ content: rowData.content, explanation: rowData.explanation, queryTemplate: null });
+            window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
+        }} style={{ cursor: 'pointer', color: '#2196F3', textDecoration: 'underline' }}>
             {rowData.content}
         </div>
     );
 
     const explanationBodyTemplate = (rowData) => {
         const text = rowData.explanation || '';
-
-        const labelColor =
-            LABELS.find(l => l.value === rowData.label)?.color || "#6b7280";
-
+        const labelColor = LABELS.find(l => l.value === rowData.label)?.color || "#6b7280";
         if (isImageUrl(text)) {
             return (
-                <img
-                    src={text.trim()}
-                    alt="Explanation"
-                    style={{
-                        maxWidth: '200px',
-                        maxHeight: '100px',
-                        cursor: 'pointer',
-                        objectFit: 'contain'
-                    }}
-                    onClick={() => {
-                        setCurrentImage(text.trim());
-                        setImageError(false);
-                        setImageModalVisible(true);
-                    }}
-                    onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.parentNode.innerHTML =
-                            '<span style="color: red;">Image cannot be reached</span>';
-                    }}
-                />
+                <img src={text.trim()} alt="Explanation" style={{ maxWidth: '200px', maxHeight: '100px', cursor: 'pointer', objectFit: 'contain' }} onClick={() => {
+                    setCurrentImage(text.trim());
+                    setImageError(false);
+                    setImageModalVisible(true);
+                }} onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.parentNode.innerHTML = '<span style="color: red;">Image cannot be reached</span>';
+                }} />
             );
         }
-
         if (isHtmlContent(text)) {
             return (
-                <Button
-                    label="Open Rule"
-                    size="small"
-                    onClick={() => {
-                        setCurrentTableHtml(text);
-                        setTableModalVisible(true);
-                    }}
-                    style={{
-                        padding: '6px 12px',
-                        fontSize: '0.875rem',
-                        backgroundColor: labelColor,
-                        borderColor: labelColor,
-                        color: '#fff'
-                    }}
-                />
+                <Button label="Open Rule" size="small" onClick={() => {
+                    setCurrentTableHtml(text);
+                    setTableModalVisible(true);
+                }} style={{ padding: '6px 12px', fontSize: '0.875rem', backgroundColor: labelColor, borderColor: labelColor, color: '#fff' }} />
             );
         }
-
         return <b>{text}</b>;
     };
 
@@ -504,13 +451,8 @@ export default function LearningTable() {
     const menuModel = selectedRow ? (() => {
         const customActions = customAiActions[selectedRow.label] || [];
         const hasImageOrTable = isImageUrl(selectedRow.explanation) || isHtmlContent(selectedRow.explanation);
-
         if (selectedRow.label === 'word' && !hasImageOrTable) {
-            const menu = [{
-                label: isDesktop ? 'Practice (Typing Trainer)' : 'Practice (Spell Game)',
-                icon: 'pi pi-play',
-                command: () => openGame(selectedRow)
-            }];
+            const menu = [{ label: isDesktop ? 'Practice (Typing Trainer)' : 'Practice (Spell Game)', icon: 'pi pi-play', command: () => openGame(selectedRow) }];
             customActions.forEach(act => {
                 menu.push({
                     label: act.text,
@@ -523,7 +465,6 @@ export default function LearningTable() {
             });
             return menu;
         }
-
         if (customActions.length > 0) {
             return customActions.map(act => ({
                 label: act.text,
@@ -595,15 +536,8 @@ export default function LearningTable() {
 
                 <div style={{ padding: '1rem', backgroundColor: 'white', borderRadius: '0.75rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)', border: '1px solid #e5e7eb' }}>
                     <h2 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.75rem', color: '#1f2937' }}>Quick ChatGPT Buttons</h2>
-                    <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '0.75rem',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: '1rem'
-                    }}>
-                    <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '150px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', justifyContent: 'center', marginBottom: '1rem' }}>
+                        <div style={{ position: 'relative', flex: '1 1 200px', minWidth: '150px' }}>
                             <InputText placeholder="Button name" value={newButtonName} onChange={(e) => setNewButtonName(e.target.value)} style={{ width: '100%', paddingRight: '2rem' }} />
                             {newButtonName && <button onClick={() => setNewButtonName("")} style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", color: "#777", background: "transparent", border: "none", cursor: "pointer", fontSize: "14px" }}>✕</button>}
                         </div>
@@ -616,11 +550,7 @@ export default function LearningTable() {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
                         {quickButtons.map((btn) => (
                             <div key={btn.id} style={{ position: 'relative', display: 'inline-block' }}>
-                                <Button
-                                    label={btn.name}
-                                    onClick={() => openQuickButtonChatGPT(btn.query)}
-                                    style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', paddingRight: '2rem' }}
-                                />
+                                <Button label={btn.name} onClick={() => openQuickButtonChatGPT(btn.query)} style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', paddingRight: '2rem' }} />
                                 <button onClick={() => { if (window.confirm(`Delete button "${btn.name}"?`)) deleteQuickButton(btn.id); }} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: 'white', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>×</button>
                             </div>
                         ))}
@@ -629,8 +559,12 @@ export default function LearningTable() {
                 </div>
             </div>
 
+            <div style={{ marginBottom: '1rem' }}>
+                <ToggleButton onLabel="All Items" offLabel="Spaced Repetition" onIcon="pi pi-list" offIcon="pi pi-calendar" checked={showAllItems} onChange={(e) => setShowAllItems(e.value)} style={{ width: '200px' }} />
+            </div>
+
             <div style={{ overflowX: 'auto', width: '100%' }}>
-                <DataTable value={rows} editMode="row" dataKey="id" filterDisplay="row" filters={filters} onFilter={e => setFilters(e.filters)} editingRows={editingRows} onRowEditChange={e => setEditingRows(e.data)} onRowEditComplete={onRowEditComplete} onContextMenu={(e) => { setSelectedRow(e.data); cm.current.show(e.originalEvent); }} contextMenuSelection={selectedRow} onContextMenuSelectionChange={e => setSelectedRow(e.value)} responsiveLayout="scroll" breakpoint="768px" style={{ minWidth: '600px' }}>
+                <DataTable value={filteredRows} emptyMessage={showAllItems ? "No learning items available." : "No items due for repetition at the moment."} editMode="row" dataKey="id" filterDisplay="row" filters={filters} onFilter={e => setFilters(e.filters)} editingRows={editingRows} onRowEditChange={e => setEditingRows(e.data)} onRowEditComplete={onRowEditComplete} onContextMenu={(e) => { setSelectedRow(e.data); cm.current.show(e.originalEvent); }} contextMenuSelection={selectedRow} onContextMenuSelectionChange={e => setSelectedRow(e.value)} responsiveLayout="scroll" breakpoint="768px" style={{ minWidth: '600px' }}>
                     <Column header="#" body={orderBody} style={{ width: "3rem", textAlign: "center" }} />
                     <Column field="statusLabel" header="Status" body={statusBodyTemplate} sortable sortFunction={statusSortFunction} filter filterElement={createFilterTemplate(STATUS_LABELS, 'color')} showFilterMenu={false} showFilterMatchModes={false} showClearButton={false} showApplyButton={false} style={{ minWidth: "10rem" }} />
                     <Column field="number_of_repeats" header="Repeats" body={quantityBodyTemplate} sortable filter filterField="repeatsLabel" filterElement={createFilterTemplate(REPEATS_LABELS, 'color')} showFilterMenu={false} showFilterMatchModes={false} showClearButton={false} showApplyButton={false} style={{ minWidth: "6rem", textAlign: "center" }} />
@@ -642,20 +576,10 @@ export default function LearningTable() {
                 </DataTable>
             </div>
 
-            {gameModalVisible && gameModalData && (
-                isDesktop ? (
-                    <TypingTrainerModal wordData={{ ...gameModalData, content: gameModalData.combinedText }} visible={gameModalVisible} onClose={() => { setGameModalVisible(false); setGameModalData(null); }} />
-                ) : (
-                    <SpellGameModal spellText={gameModalData.combinedText} visible={gameModalVisible} onClose={() => { setGameModalVisible(false); setGameModalData(null); }} />
-                )
-            )}
+            {gameModalVisible && gameModalData && (isDesktop ? (<TypingTrainerModal wordData={{ ...gameModalData, content: gameModalData.combinedText }} visible={gameModalVisible} onClose={() => { setGameModalVisible(false); setGameModalData(null); }} />) : (<SpellGameModal spellText={gameModalData.combinedText} visible={gameModalVisible} onClose={() => { setGameModalVisible(false); setGameModalData(null); }} />))}
 
             <Dialog header="Image Viewer" visible={imageModalVisible} style={{ width: '80vw', maxWidth: '800px' }} onHide={() => setImageModalVisible(false)} modal>
-                {imageError ? (
-                    <div style={{ padding: '2rem', textAlign: 'center', color: 'red', fontSize: '1.1rem' }}>Image cannot be reached</div>
-                ) : (
-                    <img src={currentImage} alt="Full size" style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }} onError={() => setImageError(true)} />
-                )}
+                {imageError ? (<div style={{ padding: '2rem', textAlign: 'center', color: 'red', fontSize: '1.1rem' }}>Image cannot be reached</div>) : (<img src={currentImage} alt="Full size" style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain' }} onError={() => setImageError(true)} />)}
             </Dialog>
 
             <Dialog header="Rule Viewer" visible={tableModalVisible} style={{ width: '90vw', maxWidth: '1200px' }} onHide={() => setTableModalVisible(false)} modal contentStyle={{ padding: '1rem', overflowX: 'auto', maxHeight: '70vh' }}>
