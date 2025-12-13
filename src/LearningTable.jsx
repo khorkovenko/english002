@@ -291,28 +291,42 @@ export default function LearningTable() {
     const incrementRepeats = async (rowData) => {
         const now = new Date();
         const lastIncrement = rowData.last_increment ? new Date(rowData.last_increment) : null;
+
         if (lastIncrement && now - lastIncrement < 15 * 60 * 1000) {
             showToast("warn", "Too Soon", "Increment once every 15 min", 2000);
             return;
         }
+
         if (window.confirm(`Increment repeat count for "${rowData.content}"?`)) {
             try {
                 const newCount = rowData.number_of_repeats + 1;
-                const { error } = await supabase.from('learning_items').update({
-                    number_of_repeats: newCount,
-                    last_repeat_date: now.toISOString(),
-                    last_increment: now.toISOString(),
-                    updated_at: now.toISOString()
-                }).eq('id', rowData.id);
+
+                const { error } = await supabase
+                    .from('learning_items')
+                    .update({
+                        number_of_repeats: newCount,
+                        last_repeat_date: now.toISOString(),
+                        last_increment: now.toISOString(),
+                        updated_at: now.toISOString()
+                    })
+                    .eq('id', rowData.id);
+
                 if (error) throw error;
-                setRows(rows.map(r => r.id === rowData.id ? {
-                    ...r,
-                    number_of_repeats: newCount,
-                    last_repeat_date: now.toISOString(),
-                    last_increment: now.toISOString(),
-                    repeatsLabel: getRepeatsLabel(newCount),
-                    statusLabel: getStatusLabel(now.toISOString())
-                } : r));
+
+                // Use functional setState to avoid stale closures
+                setRows((prevRows) => prevRows.map(r =>
+                    r.id === rowData.id
+                        ? {
+                            ...r,
+                            number_of_repeats: newCount,
+                            last_repeat_date: now.toISOString(),
+                            last_increment: now.toISOString(),
+                            repeatsLabel: getRepeatsLabel(newCount),
+                            statusLabel: getStatusLabel(now.toISOString())
+                        }
+                        : r
+                ));
+
                 showToast("success", "Incremented", `New count: ${newCount}`, 1500);
             } catch (error) {
                 console.error('Error incrementing:', error);
