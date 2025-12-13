@@ -331,15 +331,45 @@ export default function LearningTable() {
         }
     };
 
-    const openChatGPT = (content, explanation, actionKey = null) => {
-        let queryText = '';
-        if (actionKey && aiQueries[selectedRow?.label]?.[actionKey]) {
-            queryText = aiQueries[selectedRow.label][actionKey].replace(/{content}/g, content).replace(/{explanation}/g, explanation);
-        } else {
-            queryText = `${content} - ${explanation}`;
+    const buildChatGPTQuery = ({ content, explanation, queryTemplate }) => {
+        const isSpecialExplanation =
+            isImageUrl(explanation) || isHtmlContent(explanation);
+
+        if (!queryTemplate) {
+            return isSpecialExplanation
+                ? `${content}`
+                : `${content} - ${explanation}`;
         }
-        window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
+
+        let resolvedQuery = queryTemplate
+            .replace(/{content}/g, content)
+            .replace(/{explanation}/g, explanation || "");
+
+        return isSpecialExplanation
+            ? `${content} | ${resolvedQuery}`
+            : `${content} - ${explanation} | ${resolvedQuery}`;
     };
+
+
+    const openChatGPT = (content, explanation, actionKey = null) => {
+        let queryTemplate = null;
+
+        if (actionKey && aiQueries[selectedRow?.label]?.[actionKey]) {
+            queryTemplate = aiQueries[selectedRow.label][actionKey];
+        }
+
+        const queryText = buildChatGPTQuery({
+            content,
+            explanation,
+            queryTemplate
+        });
+
+        window.open(
+            `https://chat.openai.com/?q=${encodeURIComponent(queryText)}`,
+            "_blank"
+        );
+    };
+
 
     const openGame = (row) => {
         setGameModalData({ ...row, combinedText: `${row.content} - ${row.explanation}` });
@@ -369,7 +399,27 @@ export default function LearningTable() {
     };
 
     const contentBodyTemplate = (rowData) => (
-        <div onClick={() => openChatGPT(rowData.content, rowData.explanation)} style={{ cursor: 'pointer', color: '#2196F3', textDecoration: 'underline' }}>{rowData.content}</div>
+        <div
+            onClick={() => {
+                const queryText = buildChatGPTQuery({
+                    content: rowData.content,
+                    explanation: rowData.explanation,
+                    queryTemplate: null
+                });
+
+                window.open(
+                    `https://chat.openai.com/?q=${encodeURIComponent(queryText)}`,
+                    "_blank"
+                );
+            }}
+            style={{
+                cursor: 'pointer',
+                color: '#2196F3',
+                textDecoration: 'underline'
+            }}
+        >
+            {rowData.content}
+        </div>
     );
 
     const explanationBodyTemplate = (rowData) => {
