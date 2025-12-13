@@ -5,11 +5,12 @@ import "primeicons/primeicons.css";
 import "primeflex/primeflex.css";
 
 import LearningTable from "./LearningTable";
+import AuthWrapper from "./AuthWrapper";
 
 export default function App() {
     return (
-        <div>
-            <LearningTable/>
-        </div>
+        <AuthWrapper>
+            <LearningTable />
+        </AuthWrapper>
     );
 }
