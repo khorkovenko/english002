@@ -10,7 +10,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const [drawing, setDrawing] = useState(false);
     const [paths, setPaths] = useState([]);
     const [currentPath, setCurrentPath] = useState([]);
-    const [useFinger, setUseFinger] = useState(false);
+    const [useFinger, setUseFinger] = useState(true);
     const [canvasWidth, setCanvasWidth] = useState(650);
     const [canvasHeight, setCanvasHeight] = useState(400);
 
@@ -41,13 +41,13 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         const tempCanvas = document.createElement("canvas");
         tempCanvas.width = canvasWidth;
         const ctx = tempCanvas.getContext("2d");
-        ctx.font = "bold 36px Arial";
+        ctx.font = "bold 42px Arial";
 
         const padding = 20;
         const startX = padding + 5;
         let x = startX;
         let lines = 1;
-        const lineHeight = 45;
+        const lineHeight = 50;
         const maxWidth = canvasWidth - padding * 2;
 
         spellText.split(" ").forEach(word => {
@@ -78,7 +78,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     }, [spellText, canvasWidth]);
 
     const renderTextWithUnderlines = (ctx, canvas) => {
-        ctx.font = "bold 36px Arial";
+        ctx.font = "bold 42px Arial";
         ctx.textBaseline = "top";
         ctx.strokeStyle = "#4285F4";
         ctx.lineWidth = 2;
@@ -87,8 +87,8 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         const startX = padding + 5;
         let x = startX;
         let y = padding - 13;
-        const lineHeight = 45;
-        const underlineOffset = 40;
+        const lineHeight = 50;
+        const underlineOffset = 44;
         const maxWidth = canvas.width - padding * 2;
 
         spellText.split(" ").forEach((word, wi, arr) => {
@@ -134,14 +134,14 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     };
 
     const renderTextOnly = (ctx, canvas) => {
-        ctx.font = "bold 36px Arial";
+        ctx.font = "bold 42px Arial";
         ctx.textBaseline = "top";
 
         const padding = 20;
         const startX = padding + 5;
         let x = startX;
         let y = padding - 13;
-        const lineHeight = 45;
+        const lineHeight = 50;
         const maxWidth = canvas.width - padding * 2;
 
         spellText.split(" ").forEach(word => {
@@ -198,9 +198,11 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
 
     const getOffset = (el, clientX, clientY) => {
         const rect = el.getBoundingClientRect();
+        const scaleX = el.width / rect.width;
+        const scaleY = el.height / rect.height;
         return {
-            x: clientX - rect.left,
-            y: clientY - rect.top
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
         };
     };
 
