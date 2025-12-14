@@ -25,8 +25,19 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     }, []);
 
     useEffect(() => {
-        if (!spellText) return;
+        if (!visible) return;
+        const prevOverflow = document.body.style.overflow;
+        const prevPosition = document.body.style.position;
+        document.body.style.overflow = "hidden";
+        document.body.style.position = "fixed";
+        return () => {
+            document.body.style.overflow = prevOverflow;
+            document.body.style.position = prevPosition;
+        };
+    }, [visible]);
 
+    useEffect(() => {
+        if (!spellText) return;
         const tempCanvas = document.createElement("canvas");
         tempCanvas.width = canvasWidth;
         const ctx = tempCanvas.getContext("2d");
@@ -60,7 +71,6 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             } else {
                 x += wordWidth;
             }
-
             x += spaceWidth;
         });
 
@@ -70,6 +80,8 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const renderTextWithUnderlines = (ctx, canvas) => {
         ctx.font = "bold 36px Arial";
         ctx.textBaseline = "top";
+        ctx.strokeStyle = "#4285F4";
+        ctx.lineWidth = 2;
 
         const padding = 20;
         const startX = padding + 5;
@@ -155,7 +167,6 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                 ctx.fillText(word, x, y);
                 x += wordWidth;
             }
-
             x += spaceWidth;
         });
     };
@@ -170,11 +181,9 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.fillStyle = "rgba(100,100,100,0.3)";
-        ctx.strokeStyle = "#4285F4";
-        ctx.lineWidth = 2;
         renderTextWithUnderlines(ctx, canvas);
 
-        ctx.strokeStyle = "#D32F2F";
+        ctx.strokeStyle = "#000000";
         ctx.lineWidth = 4;
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
@@ -187,45 +196,56 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         });
     }, [paths, currentPath, spellText, canvasWidth, canvasHeight]);
 
+    const getOffset = (el, clientX, clientY) => {
+        const rect = el.getBoundingClientRect();
+        return {
+            x: clientX - rect.left,
+            y: clientY - rect.top
+        };
+    };
+
     useEffect(() => {
-        if (!visible) return;
-        const prevent = e => e.preventDefault();
-        document.addEventListener("contextmenu", prevent, { passive: false });
-        return () => document.removeEventListener("contextmenu", prevent);
-    }, [visible]);
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
-    const getOffset = (el, x, y) => {
-        const r = el.getBoundingClientRect();
-        return { x: x - r.left, y: y - r.top };
-    };
+        const down = e => {
+            if (!useFinger && e.pointerType !== "pen") return;
+            e.preventDefault();
+            canvas.setPointerCapture(e.pointerId);
+            setDrawing(true);
+            const pos = getOffset(canvas, e.clientX, e.clientY);
+            setCurrentPath([{ x: pos.x, y: pos.y }]);
+        };
 
-    const handlePointerDown = e => {
-        if (!useFinger && e.pointerType !== "pen") return;
-        e.preventDefault();
-        e.target.setPointerCapture(e.pointerId);
-        setDrawing(true);
-        const pos = getOffset(e.target, e.clientX, e.clientY);
-        setCurrentPath([{ x: pos.x, y: pos.y }]);
-    };
+        const move = e => {
+            if (!drawing) return;
+            if (!useFinger && e.pointerType !== "pen") return;
+            e.preventDefault();
+            const pos = getOffset(canvas, e.clientX, e.clientY);
+            setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
+        };
 
-    const handlePointerMove = e => {
-        if (!drawing) return;
-        if (!useFinger && e.pointerType !== "pen") return;
-        e.preventDefault();
-        const pos = getOffset(e.target, e.clientX, e.clientY);
-        setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
-    };
+        const up = e => {
+            if (!drawing) return;
+            e.preventDefault();
+            try { canvas.releasePointerCapture(e.pointerId); } catch {}
+            setDrawing(false);
+            setPaths(p => [...p, currentPath]);
+            setCurrentPath([]);
+        };
 
-    const handlePointerUp = e => {
-        if (!drawing) return;
-        e.preventDefault();
-        try {
-            e.target.releasePointerCapture(e.pointerId);
-        } catch {}
-        setDrawing(false);
-        setPaths(p => [...p, currentPath]);
-        setCurrentPath([]);
-    };
+        canvas.addEventListener("pointerdown", down, { passive: false });
+        canvas.addEventListener("pointermove", move, { passive: false });
+        canvas.addEventListener("pointerup", up, { passive: false });
+        canvas.addEventListener("pointercancel", up, { passive: false });
+
+        return () => {
+            canvas.removeEventListener("pointerdown", down);
+            canvas.removeEventListener("pointermove", move);
+            canvas.removeEventListener("pointerup", up);
+            canvas.removeEventListener("pointercancel", up);
+        };
+    }, [drawing, useFinger, currentPath]);
 
     const handleReset = () => {
         setPaths([]);
@@ -286,10 +306,6 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                 ref={canvasRef}
                 width={canvasWidth}
                 height={canvasHeight}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerLeave={handlePointerUp}
                 onContextMenu={e => e.preventDefault()}
                 style={{
                     border: "2px solid #1976D2",
@@ -305,11 +321,31 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                     display: "block"
                 }}
             />
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                <Button label={useFinger ? "Fingers allowed" : "Only stylus"} onClick={() => setUseFinger(v => !v)} />
-                <Button label="Reset" onClick={handleReset} />
-                <Button label="Finish" onClick={calculateAccuracy} />
-                <Button label="Close" onClick={onClose} />
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
+                <Button
+                    label={useFinger ? "Fingers allowed" : "Only stylus"}
+                    icon="pi pi-pencil"
+                    className="p-button-warning"
+                    onClick={() => setUseFinger(v => !v)}
+                />
+                <Button
+                    label="Reset"
+                    icon="pi pi-replay"
+                    className="p-button-danger"
+                    onClick={handleReset}
+                />
+                <Button
+                    label="Finish"
+                    icon="pi pi-check"
+                    className="p-button-success"
+                    onClick={calculateAccuracy}
+                />
+                <Button
+                    label="Close"
+                    icon="pi pi-times"
+                    className="p-button-secondary"
+                    onClick={onClose}
+                />
             </div>
         </Dialog>
     );
