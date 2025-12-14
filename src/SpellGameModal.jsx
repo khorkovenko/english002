@@ -14,68 +14,57 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const [canvasWidth, setCanvasWidth] = useState(650);
     const [canvasHeight, setCanvasHeight] = useState(400);
 
-    const lineSpacing = 40;
-
     useEffect(() => {
         const updateCanvasSize = () => {
             const width = Math.min(window.innerWidth - 40, 650);
             setCanvasWidth(width);
         };
         updateCanvasSize();
-        window.addEventListener('resize', updateCanvasSize);
-        return () => window.removeEventListener('resize', updateCanvasSize);
+        window.addEventListener("resize", updateCanvasSize);
+        return () => window.removeEventListener("resize", updateCanvasSize);
     }, []);
 
-    // Calculate required canvas height based on text length
     useEffect(() => {
         if (!spellText) return;
 
-        const tempCanvas = document.createElement('canvas');
+        const tempCanvas = document.createElement("canvas");
         tempCanvas.width = canvasWidth;
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCtx.font = "bold 36px Arial";
+        const ctx = tempCanvas.getContext("2d");
+        ctx.font = "bold 36px Arial";
 
         const padding = 20;
         const startX = padding + 5;
-        const maxWidth = canvasWidth - padding * 2;
         let x = startX;
-        let lineCount = 1;
+        let lines = 1;
         const lineHeight = 45;
+        const maxWidth = canvasWidth - padding * 2;
 
-        const words = spellText.split(' ');
-
-        for (let i = 0; i < words.length; i++) {
-            const word = words[i];
-            const wordWidth = tempCtx.measureText(word).width;
-            const spaceWidth = tempCtx.measureText(' ').width;
+        spellText.split(" ").forEach(word => {
+            const wordWidth = ctx.measureText(word).width;
+            const spaceWidth = ctx.measureText(" ").width;
 
             if (x > startX && x + wordWidth > canvasWidth - padding) {
-                lineCount++;
+                lines++;
                 x = startX;
             }
 
             if (wordWidth > maxWidth) {
-                for (let j = 0; j < word.length; j++) {
-                    const charWidth = tempCtx.measureText(word[j]).width;
-                    const hyphenWidth = tempCtx.measureText('-').width;
-
-                    if (x + charWidth + hyphenWidth > canvasWidth - padding && j < word.length - 1) {
-                        lineCount++;
+                [...word].forEach(char => {
+                    const charWidth = ctx.measureText(char).width;
+                    if (x + charWidth > canvasWidth - padding) {
+                        lines++;
                         x = startX;
                     }
                     x += charWidth;
-                }
+                });
             } else {
                 x += wordWidth;
             }
 
-            if (i < words.length - 1) {
-                x += spaceWidth;
-            }
-        }
+            x += spaceWidth;
+        });
 
-        const calculatedHeight = (lineCount * lineHeight) + (padding * 2) + 60;
-        setCanvasHeight(Math.max(400, calculatedHeight));
+        setCanvasHeight(Math.max(400, lines * lineHeight + padding * 2 + 60));
     }, [spellText, canvasWidth]);
 
     const renderTextWithUnderlines = (ctx, canvas) => {
@@ -84,19 +73,15 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
 
         const padding = 20;
         const startX = padding + 5;
-        const startY = padding - 13;
-        const maxWidth = canvas.width - padding * 2;
         let x = startX;
-        let y = startY;
+        let y = padding - 13;
         const lineHeight = 45;
         const underlineOffset = 40;
+        const maxWidth = canvas.width - padding * 2;
 
-        const words = spellText.split(' ');
-
-        for (let i = 0; i < words.length; i++) {
-            const word = words[i];
+        spellText.split(" ").forEach((word, wi, arr) => {
             const wordWidth = ctx.measureText(word).width;
-            const spaceWidth = ctx.measureText(' ').width;
+            const spaceWidth = ctx.measureText(" ").width;
 
             if (x > startX && x + wordWidth > canvas.width - padding) {
                 x = startX;
@@ -104,55 +89,36 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             }
 
             if (wordWidth > maxWidth) {
-                for (let j = 0; j < word.length; j++) {
-                    const char = word[j];
+                [...word].forEach(char => {
                     const charWidth = ctx.measureText(char).width;
-                    const hyphenWidth = ctx.measureText('-').width;
-
-                    if (x + charWidth + hyphenWidth > canvas.width - padding && j < word.length - 1) {
-                        ctx.fillText('-', x, y);
+                    if (x + charWidth > canvas.width - padding) {
                         x = startX;
                         y += lineHeight;
                     }
-
-                    const charX = x;
                     ctx.fillText(char, x, y);
-
-                    ctx.strokeStyle = "#4285F4";
-                    ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.moveTo(charX, y + underlineOffset);
-                    ctx.lineTo(charX + charWidth, y + underlineOffset);
+                    ctx.moveTo(x, y + underlineOffset);
+                    ctx.lineTo(x + charWidth, y + underlineOffset);
                     ctx.stroke();
-
                     x += charWidth;
-                }
+                });
             } else {
-                const wordX = x;
                 ctx.fillText(word, x, y);
-
-                ctx.strokeStyle = "#4285F4";
-                ctx.lineWidth = 2;
                 ctx.beginPath();
-                ctx.moveTo(wordX, y + underlineOffset);
-                ctx.lineTo(wordX + wordWidth, y + underlineOffset);
+                ctx.moveTo(x, y + underlineOffset);
+                ctx.lineTo(x + wordWidth, y + underlineOffset);
                 ctx.stroke();
-
                 x += wordWidth;
             }
 
-            if (i < words.length - 1) {
-                const spaceX = x;
-                ctx.strokeStyle = "#4285F4";
-                ctx.lineWidth = 2;
+            if (wi < arr.length - 1) {
                 ctx.beginPath();
-                ctx.moveTo(spaceX, y + underlineOffset);
-                ctx.lineTo(spaceX + spaceWidth, y + underlineOffset);
+                ctx.moveTo(x, y + underlineOffset);
+                ctx.lineTo(x + spaceWidth, y + underlineOffset);
                 ctx.stroke();
-
                 x += spaceWidth;
             }
-        }
+        });
     };
 
     const renderTextOnly = (ctx, canvas) => {
@@ -161,18 +127,14 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
 
         const padding = 20;
         const startX = padding + 5;
-        const startY = padding - 13;
-        const maxWidth = canvas.width - padding * 2;
         let x = startX;
-        let y = startY;
+        let y = padding - 13;
         const lineHeight = 45;
+        const maxWidth = canvas.width - padding * 2;
 
-        const words = spellText.split(' ');
-
-        for (let i = 0; i < words.length; i++) {
-            const word = words[i];
+        spellText.split(" ").forEach(word => {
             const wordWidth = ctx.measureText(word).width;
-            const spaceWidth = ctx.measureText(' ').width;
+            const spaceWidth = ctx.measureText(" ").width;
 
             if (x > startX && x + wordWidth > canvas.width - padding) {
                 x = startX;
@@ -180,41 +142,36 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             }
 
             if (wordWidth > maxWidth) {
-                for (let j = 0; j < word.length; j++) {
-                    const char = word[j];
+                [...word].forEach(char => {
                     const charWidth = ctx.measureText(char).width;
-                    const hyphenWidth = ctx.measureText('-').width;
-
-                    if (x + charWidth + hyphenWidth > canvas.width - padding && j < word.length - 1) {
-                        ctx.fillText('-', x, y);
+                    if (x + charWidth > canvas.width - padding) {
                         x = startX;
                         y += lineHeight;
                     }
-
                     ctx.fillText(char, x, y);
                     x += charWidth;
-                }
+                });
             } else {
                 ctx.fillText(word, x, y);
                 x += wordWidth;
             }
 
-            if (i < words.length - 1) {
-                x += spaceWidth;
-            }
-        }
+            x += spaceWidth;
+        });
     };
 
     useEffect(() => {
         if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext("2d");
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#E3F2FD";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        ctx.fillStyle = "rgba(100, 100, 100, 0.3)";
+        ctx.fillStyle = "rgba(100,100,100,0.3)";
+        ctx.strokeStyle = "#4285F4";
+        ctx.lineWidth = 2;
         renderTextWithUnderlines(ctx, canvas);
 
         ctx.strokeStyle = "#D32F2F";
@@ -222,54 +179,51 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
 
-        paths.forEach(path => {
+        [...paths, currentPath].forEach(path => {
+            if (!path.length) return;
             ctx.beginPath();
-            path.forEach((point, i) => {
-                if (i === 0) ctx.moveTo(point.x, point.y);
-                else ctx.lineTo(point.x, point.y);
-            });
+            path.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
             ctx.stroke();
         });
-
-        if (currentPath.length > 0) {
-            ctx.beginPath();
-            currentPath.forEach((point, i) => {
-                if (i === 0) ctx.moveTo(point.x, point.y);
-                else ctx.lineTo(point.x, point.y);
-            });
-            ctx.stroke();
-        }
     }, [paths, currentPath, spellText, canvasWidth, canvasHeight]);
 
     useEffect(() => {
-        if (visible && canvasRef.current) {
-            canvasRef.current.focus();
-        }
+        if (!visible) return;
+        const prevent = e => e.preventDefault();
+        document.addEventListener("contextmenu", prevent, { passive: false });
+        return () => document.removeEventListener("contextmenu", prevent);
     }, [visible]);
 
-    const getOffset = (element, x, y) => {
-        const rect = element.getBoundingClientRect();
-        return { x: x - rect.left, y: y - rect.top };
+    const getOffset = (el, x, y) => {
+        const r = el.getBoundingClientRect();
+        return { x: x - r.left, y: y - r.top };
     };
 
-    const handlePointerDown = (e) => {
+    const handlePointerDown = e => {
         if (!useFinger && e.pointerType !== "pen") return;
+        e.preventDefault();
+        e.target.setPointerCapture(e.pointerId);
         setDrawing(true);
         const pos = getOffset(e.target, e.clientX, e.clientY);
         setCurrentPath([{ x: pos.x, y: pos.y }]);
     };
 
-    const handlePointerMove = (e) => {
+    const handlePointerMove = e => {
         if (!drawing) return;
         if (!useFinger && e.pointerType !== "pen") return;
+        e.preventDefault();
         const pos = getOffset(e.target, e.clientX, e.clientY);
-        setCurrentPath(prev => [...prev, { x: pos.x, y: pos.y }]);
+        setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
     };
 
-    const handlePointerUp = () => {
+    const handlePointerUp = e => {
         if (!drawing) return;
+        e.preventDefault();
+        try {
+            e.target.releasePointerCapture(e.pointerId);
+        } catch {}
         setDrawing(false);
-        setPaths(prev => [...prev, currentPath]);
+        setPaths(p => [...p, currentPath]);
         setCurrentPath([]);
     };
 
@@ -279,34 +233,28 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     };
 
     const calculateAccuracy = () => {
-        if (!canvasRef.current) return;
         const canvas = canvasRef.current;
-        const offCanvas = document.createElement("canvas");
-        offCanvas.width = canvas.width;
-        offCanvas.height = canvas.height;
-        const offCtx = offCanvas.getContext("2d");
+        const off = document.createElement("canvas");
+        off.width = canvas.width;
+        off.height = canvas.height;
+        const ctx = off.getContext("2d");
 
-        offCtx.fillStyle = "black";
-        renderTextOnly(offCtx, offCanvas);
+        ctx.fillStyle = "black";
+        renderTextOnly(ctx, off);
+        const data = ctx.getImageData(0, 0, off.width, off.height).data;
 
-        const imageData = offCtx.getImageData(0, 0, offCanvas.width, offCanvas.height).data;
+        let hit = 0;
+        let total = 0;
 
-        let pointsOnText = 0;
-        let totalPoints = 0;
-
-        paths.forEach(path => {
+        paths.forEach(path =>
             path.forEach(p => {
-                totalPoints++;
-                const px = Math.floor(p.x);
-                const py = Math.floor(p.y);
-                if (px >= 0 && px < offCanvas.width && py >= 0 && py < offCanvas.height) {
-                    const index = (py * offCanvas.width + px) * 4;
-                    if (imageData[index + 3] > 0) pointsOnText++;
-                }
-            });
-        });
+                total++;
+                const i = ((p.y | 0) * off.width + (p.x | 0)) * 4;
+                if (data[i + 3] > 0) hit++;
+            })
+        );
 
-        const accuracy = totalPoints > 0 ? Math.round((pointsOnText / totalPoints) * 100) : 0;
+        const accuracy = total ? Math.round((hit / total) * 100) : 0;
 
         if (accuracy >= 80) {
             alert(`Great job! Your accuracy: ${accuracy}%`);
@@ -323,13 +271,12 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             visible={visible}
             modal
             closable={false}
-            style={{ width: "95vw", maxWidth: "700px", padding: "0" }}
+            style={{ width: "95vw", maxWidth: "700px" }}
             contentStyle={{
                 padding: "1rem",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                overflowX: "hidden",
                 maxHeight: "85vh",
                 overflowY: "auto"
             }}
@@ -337,48 +284,32 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         >
             <canvas
                 ref={canvasRef}
-                tabIndex={0}
                 width={canvasWidth}
                 height={canvasHeight}
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerLeave={handlePointerUp}
+                onContextMenu={e => e.preventDefault()}
                 style={{
                     border: "2px solid #1976D2",
                     borderRadius: "8px",
                     cursor: "crosshair",
                     marginBottom: "1rem",
                     touchAction: "none",
+                    userSelect: "none",
+                    WebkitUserSelect: "none",
+                    WebkitTouchCallout: "none",
+                    WebkitTapHighlightColor: "transparent",
                     maxWidth: "100%",
                     display: "block"
                 }}
             />
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
-                <Button
-                    label={useFinger ? "Fingers allowed" : "Only stylus"}
-                    icon="pi pi-pencil"
-                    className="p-button-warning"
-                    onClick={() => setUseFinger(!useFinger)}
-                />
-                <Button
-                    label="Reset"
-                    icon="pi pi-replay"
-                    className="p-button-danger"
-                    onClick={handleReset}
-                />
-                <Button
-                    label="Finish"
-                    icon="pi pi-check"
-                    className="p-button-success"
-                    onClick={calculateAccuracy}
-                />
-                <Button
-                    label="Close"
-                    icon="pi pi-times"
-                    className="p-button-secondary"
-                    onClick={onClose}
-                />
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                <Button label={useFinger ? "Fingers allowed" : "Only stylus"} onClick={() => setUseFinger(v => !v)} />
+                <Button label="Reset" onClick={handleReset} />
+                <Button label="Finish" onClick={calculateAccuracy} />
+                <Button label="Close" onClick={onClose} />
             </div>
         </Dialog>
     );
