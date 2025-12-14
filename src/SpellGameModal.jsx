@@ -10,7 +10,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const [drawing, setDrawing] = useState(false);
     const [paths, setPaths] = useState([]);
     const [currentPath, setCurrentPath] = useState([]);
-    const [useFinger, setUseFinger] = useState(true);
+    const [useFinger, setUseFinger] = useState(false);
     const [canvasWidth, setCanvasWidth] = useState(650);
     const [canvasHeight, setCanvasHeight] = useState(400);
 
@@ -171,9 +171,9 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         });
     };
 
-    useEffect(() => {
-        if (!canvasRef.current) return;
+    const drawCanvas = () => {
         const canvas = canvasRef.current;
+        if (!canvas) return;
         const ctx = canvas.getContext("2d");
 
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -194,7 +194,18 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             path.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
             ctx.stroke();
         });
+    };
+
+    useEffect(() => {
+        drawCanvas();
     }, [paths, currentPath, spellText, canvasWidth, canvasHeight]);
+
+    useEffect(() => {
+        if (!visible) return;
+        requestAnimationFrame(() => {
+            drawCanvas();
+        });
+    }, [visible, canvasWidth, canvasHeight]);
 
     const getOffset = (el, clientX, clientY) => {
         const rect = el.getBoundingClientRect();
@@ -206,48 +217,48 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         };
     };
 
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-
-        const down = e => {
-            if (!useFinger && e.pointerType !== "pen") return;
-            e.preventDefault();
-            canvas.setPointerCapture(e.pointerId);
-            setDrawing(true);
-            const pos = getOffset(canvas, e.clientX, e.clientY);
-            setCurrentPath([{ x: pos.x, y: pos.y }]);
-        };
-
-        const move = e => {
-            if (!drawing) return;
-            if (!useFinger && e.pointerType !== "pen") return;
-            e.preventDefault();
-            const pos = getOffset(canvas, e.clientX, e.clientY);
-            setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
-        };
-
-        const up = e => {
-            if (!drawing) return;
-            e.preventDefault();
-            try { canvas.releasePointerCapture(e.pointerId); } catch {}
-            setDrawing(false);
-            setPaths(p => [...p, currentPath]);
-            setCurrentPath([]);
-        };
-
-        canvas.addEventListener("pointerdown", down, { passive: false });
-        canvas.addEventListener("pointermove", move, { passive: false });
-        canvas.addEventListener("pointerup", up, { passive: false });
-        canvas.addEventListener("pointercancel", up, { passive: false });
-
-        return () => {
-            canvas.removeEventListener("pointerdown", down);
-            canvas.removeEventListener("pointermove", move);
-            canvas.removeEventListener("pointerup", up);
-            canvas.removeEventListener("pointercancel", up);
-        };
-    }, [drawing, useFinger, currentPath]);
+    // useEffect(() => {
+    //     const canvas = canvasRef.current;
+    //     if (!canvas) return;
+    //
+    //     const down = e => {
+    //         if (!useFinger && e.pointerType !== "pen") return;
+    //         e.preventDefault();
+    //         canvas.setPointerCapture(e.pointerId);
+    //         setDrawing(true);
+    //         const pos = getOffset(canvas, e.clientX, e.clientY);
+    //         setCurrentPath([{ x: pos.x, y: pos.y }]);
+    //     };
+    //
+    //     const move = e => {
+    //         if (!drawing) return;
+    //         if (!useFinger && e.pointerType !== "pen") return;
+    //         e.preventDefault();
+    //         const pos = getOffset(canvas, e.clientX, e.clientY);
+    //         setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
+    //     };
+    //
+    //     const up = e => {
+    //         if (!drawing) return;
+    //         e.preventDefault();
+    //         try { canvas.releasePointerCapture(e.pointerId); } catch {}
+    //         setDrawing(false);
+    //         setPaths(p => [...p, currentPath]);
+    //         setCurrentPath([]);
+    //     };
+    //
+    //     canvas.addEventListener("pointerdown", down, { passive: false });
+    //     canvas.addEventListener("pointermove", move, { passive: false });
+    //     canvas.addEventListener("pointerup", up, { passive: false });
+    //     canvas.addEventListener("pointercancel", up, { passive: false });
+    //
+    //     return () => {
+    //         canvas.removeEventListener("pointerdown", down);
+    //         canvas.removeEventListener("pointermove", move);
+    //         canvas.removeEventListener("pointerup", up);
+    //         canvas.removeEventListener("pointercancel", up);
+    //     };
+    // }, [drawing, useFinger, currentPath]);
 
     const handleReset = () => {
         setPaths([]);
@@ -293,6 +304,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             visible={visible}
             modal
             closable={false}
+            focusOnShow={false}
             style={{ width: "95vw", maxWidth: "700px" }}
             contentStyle={{
                 padding: "1rem",
@@ -303,12 +315,45 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                 overflowY: "auto"
             }}
             onHide={onClose}
+            onShow={() => {
+                requestAnimationFrame(() => {
+                    drawCanvas();
+                    canvasRef.current?.focus();
+                });
+            }}
         >
+
             <canvas
                 ref={canvasRef}
+                tabIndex={0}
                 width={canvasWidth}
                 height={canvasHeight}
                 onContextMenu={e => e.preventDefault()}
+                onPointerDown={e => {
+                    if (!useFinger && e.pointerType !== "pen") return;
+                    e.preventDefault();
+                    const pos = getOffset(canvasRef.current, e.clientX, e.clientY);
+                    setDrawing(true);
+                    setCurrentPath([{ x: pos.x, y: pos.y }]);
+                }}
+                onPointerMove={e => {
+                    if (!drawing) return;
+                    if (!useFinger && e.pointerType !== "pen") return;
+                    e.preventDefault();
+                    const pos = getOffset(canvasRef.current, e.clientX, e.clientY);
+                    setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
+                }}
+                onPointerUp={e => {
+                    if (!drawing) return;
+                    e.preventDefault();
+                    setDrawing(false);
+                    setPaths(p => [...p, currentPath]);
+                    setCurrentPath([]);
+                }}
+                onPointerCancel={() => {
+                    setDrawing(false);
+                    setCurrentPath([]);
+                }}
                 style={{
                     border: "2px solid #1976D2",
                     borderRadius: "8px",
@@ -323,6 +368,8 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                     display: "block"
                 }}
             />
+
+
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
                 <Button
                     label={useFinger ? "Fingers allowed" : "Only stylus"}
