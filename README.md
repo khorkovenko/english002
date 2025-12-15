@@ -1,70 +1,48 @@
-# Getting Started with Create React App
+# Getting Started with LinguaPilot App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## Basic prompts for learning a word, a rule, a topic:
 
-## Available Scripts
+### Learn Word
 
-In the project directory, you can run:
+### Learn Rule
 
-### `npm start`
+### Learn Topic
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+---
 
-### `npm test`
+## Quick Prompts for Explaining
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+These prompts help you understand and explain words, rules, and topics in depth.
 
-### `npm run build`
+### Explain Word
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+1. **Short Story**  
+   Create a short story (maximum 30 words) that explains the given word by using it naturally in context. The meaning should be clear for a non-native English speaker.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+2. **Translation & Synonyms**  
+   Provide a direct English translation of the given word or phrase. Include 3–5 English synonyms, ordered from the most commonly used to the least commonly used.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+3. **Antonyms**  
+   Provide 3–5 English antonyms for the given word, ordered from the most commonly used to the least commonly used.
 
-### `npm run eject`
+---
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Explain Rule
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+1. **HTML Table**  
+   Create an HTML table using only the `<table>` tag with inline styles (no CSS classes or external styles). The table should clearly explain the given rule or concept (it can be about English, Java, Physics, or any subject) and include multiple examples demonstrating the rule or concept in context. The table layout should be responsive and adaptive for different screen sizes.
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+---
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+### Explain Topic
 
-## Learn More
+1. **Simple Description Table**  
+   Create an HTML table using only the `<table>` tag with inline styles. The table should provide a simple description of the given topic, explain what it is, and list key words related to the topic that learners should know. The table should be clear, readable, and adaptive for different screen sizes.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+2. **Detailed Description Table**  
+   Create an HTML table using only the `<table>` tag with inline styles. The table should provide a detailed description of the given topic, explain what it is, and list key words related to the topic that learners should know. The table should be clear, readable, and adaptive for different screen sizes.
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+---
 
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Happy Learning with **LinguaPilot!**
