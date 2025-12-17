@@ -492,6 +492,27 @@ export default function LearningTable() {
         return [{ label: 'No actions available', icon: 'pi pi-ban', disabled: true }];
     })() : [];
 
+    const getQuickButtonColor = (name) => {
+        if (!name) return "#000";
+
+        const lower = name.toLowerCase();
+
+        if (lower.includes("word")) {
+            return LABELS.find(l => l.value === "word")?.color || "#000";
+        }
+
+        if (lower.includes("rule")) {
+            return LABELS.find(l => l.value === "rule")?.color || "#000";
+        }
+
+        if (lower.includes("topic")) {
+            return LABELS.find(l => l.value === "topic")?.color || "#000";
+        }
+
+        return "#000";
+    };
+
+
     if (loading) return <div style={{ padding: 20, textAlign: 'center' }}>Loading...</div>;
 
     return (
@@ -562,12 +583,45 @@ export default function LearningTable() {
                         <Button icon="pi pi-plus" label="Add Button" onClick={addQuickButton} style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', flexShrink: 0 }} />
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        {quickButtons.map((btn) => (
-                            <div key={btn.id} style={{ position: 'relative', display: 'inline-block' }}>
-                                <Button label={btn.name} onClick={() => openQuickButtonChatGPT(btn.query)} style={{ backgroundColor: '#6366f1', borderColor: '#6366f1', paddingRight: '2rem' }} />
-                                <button onClick={() => { if (window.confirm(`Delete button "${btn.name}"?`)) deleteQuickButton(btn.id); }} style={{ position: 'absolute', right: '0.5rem', top: '50%', transform: 'translateY(-50%)', color: 'white', background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '16px', fontWeight: 'bold' }}>×</button>
-                            </div>
-                        ))}
+                        {quickButtons.map((btn) => {
+                            const bgColor = getQuickButtonColor(btn.name);
+
+                            return (
+                                <div key={btn.id} style={{ position: 'relative', display: 'inline-block' }}>
+                                    <Button
+                                        label={btn.name}
+                                        onClick={() => openQuickButtonChatGPT(btn.query)}
+                                        style={{
+                                            backgroundColor: bgColor,
+                                            borderColor: bgColor,
+                                            color: '#fff',
+                                            paddingRight: '2rem'
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            if (window.confirm(`Delete button "${btn.name}"?`))
+                                                deleteQuickButton(btn.id);
+                                        }}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '0.5rem',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            color: 'white',
+                                            background: 'transparent',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            fontSize: '16px',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            );
+                        })}
+
                         {quickButtons.length === 0 && <p style={{ color: '#6b7280', fontStyle: 'italic', margin: 0 }}>No quick buttons yet. Add one above!</p>}
                     </div>
                 </div>
