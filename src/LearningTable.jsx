@@ -94,6 +94,52 @@ export default function LearningTable() {
     const [newButtonQuery, setNewButtonQuery] = useState("");
     const [showAllItems, setShowAllItems] = useState(true);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const word = params.get("word");
+
+        if (!word) return;
+
+        const insertWord = async () => {
+            try {
+                const { error } = await supabase
+                    .from("learning_items")
+                    .insert([{
+                        label: "word",
+                        content: word.trim(),
+                        explanation: "",
+                        last_repeat_date: new Date().toISOString(),
+                        number_of_repeats: 0
+                    }]);
+
+                if (error) throw error;
+
+                toast.current?.show({
+                    severity: "success",
+                    summary: "Added",
+                    detail: `"${word}" saved`,
+                    life: 2000
+                });
+
+                window.history.replaceState(
+                    {},
+                    document.title,
+                    window.location.pathname
+                );
+            } catch (err) {
+                console.error(err);
+                toast.current?.show({
+                    severity: "error",
+                    summary: "Error",
+                    detail: "Failed to add word"
+                });
+            }
+        };
+
+        insertWord();
+    }, []);
+
+
     const spacedRepetitionDays = [1, 7, 16, 35];
 
     const filteredRows = useMemo(() => {
