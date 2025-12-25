@@ -139,16 +139,22 @@ export default function LearningTable() {
         insertWord();
     }, []);
 
-
-    const spacedRepetitionDays = [1, 7, 16, 35];
+    const repetitionSchedule = [0, 1, 3, 7, 16, 35];
 
     const filteredRows = useMemo(() => {
         if (showAllItems) return rows;
 
+        const now = Date.now();
+
         return rows.filter(row => {
-            const lastRepeat = new Date(row.last_repeat_date);
-            const diffDays = Math.floor((new Date() - lastRepeat) / (1000 * 60 * 60 * 24));
-            return spacedRepetitionDays.some(d => diffDays === d);
+            const repeats = row.number_of_repeats ?? 0;
+            const targetDays = repetitionSchedule[Math.min(repeats, repetitionSchedule.length - 1)];
+
+            const diffDays = Math.floor(
+                (now - new Date(row.last_repeat_date)) / 86400000
+            );
+
+            return diffDays >= targetDays;
         });
     }, [rows, showAllItems]);
 
@@ -196,7 +202,7 @@ export default function LearningTable() {
                 queriesMap[item.label][item.action_key] = item.query_text;
                 const defaultKeys = ['explain', 'practice', 'explainRule', 'discuss', 'practiceTopic'];
                 if (!defaultKeys.includes(item.action_key)) {
-                    customActionsMap[item.label].push({ id: item.id, key: item.action_key, text: item.action_key, query: item.query_text });
+                    customActionsMap[item.label].push({ id: item.id, key: item.action_key, text: item.action_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), query: item.query_text });
                 }
             });
             setAiQueries(queriesMap);
@@ -442,8 +448,45 @@ export default function LearningTable() {
         const repeatsConfig = REPEATS_LABELS.find(r => rowData.number_of_repeats >= r.min && rowData.number_of_repeats <= r.max);
         return (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                <span style={{ display: 'inline-block', width: 30, height: 30, lineHeight: '30px', borderRadius: '50%', textAlign: 'center', fontWeight: 'bold', color: 'white', backgroundColor: repeatsConfig?.color }}>{rowData.number_of_repeats}</span>
-                <Button label="++" onClick={() => incrementRepeats(rowData)} size="small" style={{ padding: '4px 8px', fontSize: '0.75rem', minWidth: 'auto', backgroundColor: repeatsConfig?.color, borderColor: repeatsConfig?.color, color: 'white' }} />
+            <span
+                style={{
+                    display: 'inline-block',
+                    width: 30,
+                    height: 30,
+                    lineHeight: '30px',
+                    borderRadius: '50%',
+                    textAlign: 'center',
+                    fontWeight: 'bold',
+                    color: 'white',
+                    backgroundColor: repeatsConfig?.color,
+                    cursor: 'not-allowed'
+                }}
+            >
+                {rowData.number_of_repeats}
+            </span>
+                <Button
+                    label="++"
+                    onClick={() => incrementRepeats(rowData)}
+                    size="small"
+                    style={{
+                        padding: '4px 8px',
+                        fontSize: '0.75rem',
+                        minWidth: 'auto',
+                        backgroundColor: repeatsConfig?.color,
+                        borderColor: repeatsConfig?.color,
+                        color: 'white',
+                        cursor: 'pointer',
+                        transition: 'background-color 0.2s, border-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#2196F3';
+                        e.currentTarget.style.borderColor = '#2196F3';
+                    }}
+                    onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = repeatsConfig?.color;
+                        e.currentTarget.style.borderColor = repeatsConfig?.color;
+                    }}
+                />
             </div>
         );
     };
