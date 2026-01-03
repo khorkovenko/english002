@@ -523,7 +523,18 @@ export default function LearningTable() {
                 }} style={{ padding: '6px 12px', fontSize: '0.875rem', backgroundColor: labelColor, borderColor: labelColor, color: '#fff' }} />
             );
         }
-        return <b>{text}</b>;
+        return (
+            <b
+                style={{
+                    cursor: 'pointer',
+                    color: 'black'
+                }}
+                title="Start practice"
+                onClick={() => openGame(rowData)}
+            >
+                {text}
+            </b>
+        );
     };
 
     const textEditor = (options) => <InputText type="text" value={options.value} onChange={(e) => options.editorCallback(e.target.value)} style={{ width: '100%' }} />;
