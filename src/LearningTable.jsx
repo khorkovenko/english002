@@ -503,8 +503,19 @@ export default function LearningTable() {
                         transition: 'background-color 0.2s, border-color 0.2s'
                     }}
                     onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#2196F3';
-                        e.currentTarget.style.borderColor = '#2196F3';
+                        if (rowData.number_of_repeats === 1) {
+                            e.currentTarget.style.backgroundColor = '#FF4500';
+                            e.currentTarget.style.borderColor = '#FF4500';
+                        } else if (rowData.number_of_repeats === 3) {
+                            e.currentTarget.style.backgroundColor = '#FFA500';
+                            e.currentTarget.style.borderColor = '#FFA500';
+                        } else if (rowData.number_of_repeats === 5) {
+                            e.currentTarget.style.backgroundColor = '#006400';
+                            e.currentTarget.style.borderColor = '#006400';
+                        } else {
+                            e.currentTarget.style.backgroundColor = '#000';
+                            e.currentTarget.style.borderColor = '#000';
+                        }
                     }}
                     onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = repeatsConfig?.color;
