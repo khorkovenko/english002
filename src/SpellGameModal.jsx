@@ -78,7 +78,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     }, [spellText, canvasWidth]);
 
     const renderTextWithUnderlines = (ctx, canvas) => {
-        ctx.font = "bold 42px Arial";
+        ctx.font = "42px 'Patrick Hand', cursive";
         ctx.textBaseline = "top";
         ctx.strokeStyle = "#4285F4";
         ctx.lineWidth = 2;
