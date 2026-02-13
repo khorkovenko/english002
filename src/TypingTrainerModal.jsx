@@ -91,6 +91,10 @@ export const TypingTrainerModal = ({ wordData, onClose, visible }) => {
         if (!visible || !phrase || !gameStarted) return;
 
         const handleKeyDown = (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+            }
+
             if (e.key === 'Escape') {
                 onClose();
                 return;
