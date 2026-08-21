@@ -7,10 +7,10 @@ import {Button} from "primereact/button";
 import {Tag} from "primereact/tag";
 import {Toast} from "primereact/toast";
 import {ContextMenu} from "primereact/contextmenu";
-import {FilterMatchMode} from 'primereact/api';
+import {FilterMatchMode} from "primereact/api";
 import {SelectButton} from "primereact/selectbutton";
 import {Dialog} from "primereact/dialog";
-import {supabase} from './supabaseClient';
+import {supabase} from "./supabaseClient";
 import {SpellGameModal} from "./SpellGameModal";
 import {TypingTrainerModal} from "./TypingTrainerModal";
 import {ToggleButton} from "primereact/togglebutton";
@@ -37,29 +37,48 @@ const REPEATS_LABELS = [
     {name: "Mastered", min: 6, max: Infinity, color: "#006400"},
 ];
 
-const getStatusLabel = (dateStr) => STATUS_LABELS.find(s => new Date() - new Date(dateStr) <= s.maxDays * 24 * 60 * 60 * 1000)?.name || "Lost";
-const getRepeatsLabel = (repeats) => REPEATS_LABELS.find(r => repeats >= r.min && repeats <= r.max)?.name || "Mastered";
-const getSeverity = (label) => ({word: "info", rule: "success", topic: "warning"}[label] || null);
+const REPETITION_SCHEDULE = [0, 1, 3, 7, 16, 35];
+const DAY = 86400000;
 
-const isImageUrl = (text) => {
-    if (!text || typeof text !== 'string') return false;
-    const trimmed = text.trim();
-    return /^https?:\/\//i.test(trimmed) && (/\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?[^?\s]*)?$/i.test(trimmed) || /imgur\.com/i.test(trimmed));
+const labelColor = (v, fb = "#000") => LABELS.find(l => l.value === v)?.color || fb;
+const getStatusLabel = d => STATUS_LABELS.find(s => new Date() - new Date(d) <= s.maxDays * DAY)?.name || "Lost";
+const getRepeatsLabel = n => REPEATS_LABELS.find(r => n >= r.min && n <= r.max)?.name || "Mastered";
+const getSeverity = l => ({word: "info", rule: "success", topic: "warning"}[l] || null);
+const decorate = item => ({...item, statusLabel: getStatusLabel(item.last_repeat_date), repeatsLabel: getRepeatsLabel(item.number_of_repeats)});
+
+const isImageUrl = t => {
+    if (!t || typeof t !== "string") return false;
+    const s = t.trim();
+    return /^https?:\/\//i.test(s) && (/\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?[^?\s]*)?$/i.test(s) || /imgur\.com/i.test(s));
 };
 
-const isHtmlContent = (text) => text && typeof text === 'string' && /<[^>]+>/.test(text);
+const isHtmlContent = t => t && typeof t === "string" && /<[^>]+>/.test(t);
 
-const timeDiffString = (dateStr) => {
-    const diff = new Date() - new Date(dateStr);
-    const d = Math.floor(diff / 86400000);
-    const h = Math.floor(diff / 3600000) % 24;
-    const m = Math.floor(diff / 60000) % 60;
-    const s = Math.floor(diff / 1000) % 60;
-    if (d > 0) return `${d}d ${h}h`;
+const timeDiffString = d => {
+    const diff = new Date() - new Date(d);
+    const days = Math.floor(diff / DAY), h = Math.floor(diff / 3600000) % 24, m = Math.floor(diff / 60000) % 60, s = Math.floor(diff / 1000) % 60;
+    if (days > 0) return `${days}d ${h}h`;
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
 };
+
+const openChatGPTUrl = q => window.open(`https://chat.openai.com/?q=${encodeURIComponent(q)}`, "_blank");
+
+const buildChatGPTQuery = ({content, explanation, queryTemplate}) => {
+    const special = isImageUrl(explanation) || isHtmlContent(explanation);
+    if (!queryTemplate) return special ? `${content}` : `${content} - ${explanation}`;
+    const resolved = queryTemplate.replace(/{content}/g, content).replace(/{explanation}/g, explanation || "");
+    return special ? `${content} | ${resolved}` : `${content} - ${explanation} | ${resolved}`;
+};
+
+const ClearIcon = ({onClick, right = "0.5rem", color = "#777", size = "14px", char = "✕", weight}) => (
+    <button onClick={onClick} style={{position: "absolute", right, top: "50%", transform: "translateY(-50%)", color, background: "transparent", border: "none", cursor: "pointer", fontSize: size, fontWeight: weight}}>{char}</button>
+);
+
+const ColorChip = ({color, children}) => (
+    <div style={{backgroundColor: color, color: "white", padding: "4px 8px", borderRadius: 4, fontWeight: 500}}>{children}</div>
+);
 
 export default function LearningTable() {
     const [rows, setRows] = useState([]);
@@ -96,97 +115,57 @@ export default function LearningTable() {
     const [selectedRows, setSelectedRows] = useState([]);
     const [metaKey] = useState(true);
 
+    const toast = useRef(null);
+    const cm = useRef(null);
+
+    const showToast = (severity, summary, detail, life = 3000) => toast.current?.show({severity, summary, detail, life});
+
     useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const word = params.get("word");
-
+        const word = new URLSearchParams(window.location.search).get("word");
         if (!word) return;
-
-        const insertWord = async () => {
+        (async () => {
             try {
-                const {error} = await supabase
-                    .from("learning_items")
-                    .insert([{
-                        label: "word",
-                        content: word.trim(),
-                        explanation: "",
-                        last_repeat_date: new Date().toISOString(),
-                        number_of_repeats: 0
-                    }]);
-
+                const {error} = await supabase.from("learning_items").insert([{
+                    label: "word", content: word.trim(), explanation: "",
+                    last_repeat_date: new Date().toISOString(), number_of_repeats: 0
+                }]);
                 if (error) throw error;
-
-                toast.current?.show({
-                    severity: "success",
-                    summary: "Added",
-                    detail: `"${word}" saved`,
-                    life: 2000
-                });
-
-                window.history.replaceState(
-                    {},
-                    document.title,
-                    window.location.pathname
-                );
+                toast.current?.show({severity: "success", summary: "Added", detail: `"${word}" saved`, life: 2000});
+                window.history.replaceState({}, document.title, window.location.pathname);
             } catch (err) {
                 console.error(err);
-                toast.current?.show({
-                    severity: "error",
-                    summary: "Error",
-                    detail: "Failed to add word"
-                });
+                toast.current?.show({severity: "error", summary: "Error", detail: "Failed to add word"});
             }
-        };
-
-        insertWord();
+        })();
     }, []);
-
-    const repetitionSchedule = [0, 1, 3, 7, 16, 35];
 
     const filteredRows = useMemo(() => {
         if (showAllItems) return rows;
-
         const now = Date.now();
-
         return rows.filter(row => {
             const repeats = row.number_of_repeats ?? 0;
-            const targetDays = repetitionSchedule[Math.min(repeats, repetitionSchedule.length - 1)];
-
-            const diffDays = Math.floor(
-                (now - new Date(row.last_repeat_date)) / 86400000
-            );
-
-            return diffDays >= targetDays;
+            const targetDays = REPETITION_SCHEDULE[Math.min(repeats, REPETITION_SCHEDULE.length - 1)];
+            return Math.floor((now - new Date(row.last_repeat_date)) / DAY) >= targetDays;
         });
     }, [rows, showAllItems]);
-
-    const toast = useRef(null);
-    const cm = useRef(null);
 
     useEffect(() => {
         fetchData();
         fetchAiQueries();
         fetchQuickButtons();
         const handleResize = () => setIsDesktop(window.innerWidth >= 768);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
+        window.addEventListener("resize", handleResize);
+        return () => window.removeEventListener("resize", handleResize);
     }, []);
 
     const fetchData = async () => {
         try {
             setLoading(true);
-            const {
-                data,
-                error
-            } = await supabase.from('learning_items').select('*').order('created_at', {ascending: false});
+            const {data, error} = await supabase.from("learning_items").select("*").order("created_at", {ascending: false});
             if (error) throw error;
-            setRows((data || []).map(item => ({
-                ...item,
-                statusLabel: getStatusLabel(item.last_repeat_date),
-                repeatsLabel: getRepeatsLabel(item.number_of_repeats),
-            })));
+            setRows((data || []).map(decorate));
         } catch (error) {
-            console.error('Error fetching data:', error);
+            console.error("Error fetching data:", error);
             showToast("error", "Error", "Failed to load data");
         } finally {
             setLoading(false);
@@ -195,22 +174,21 @@ export default function LearningTable() {
 
     const fetchAiQueries = async () => {
         try {
-            const {data, error} = await supabase.from('ai_action_queries').select('*');
+            const {data, error} = await supabase.from("ai_action_queries").select("*");
             if (error) throw error;
-            const queriesMap = {};
-            const customActionsMap = {};
+            const queriesMap = {}, customActionsMap = {};
+            const defaultKeys = ["explain", "practice", "explainRule", "discuss", "practiceTopic"];
             (data || []).forEach(item => {
                 if (!queriesMap[item.label]) {
                     queriesMap[item.label] = {};
                     customActionsMap[item.label] = [];
                 }
                 queriesMap[item.label][item.action_key] = item.query_text;
-                const defaultKeys = ['explain', 'practice', 'explainRule', 'discuss', 'practiceTopic'];
                 if (!defaultKeys.includes(item.action_key)) {
                     customActionsMap[item.label].push({
                         id: item.id,
                         key: item.action_key,
-                        text: item.action_key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                        text: item.action_key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
                         query: item.query_text
                     });
                 }
@@ -218,65 +196,44 @@ export default function LearningTable() {
             setAiQueries(queriesMap);
             setCustomAiActions(customActionsMap);
         } catch (error) {
-            console.error('Error fetching AI queries:', error);
+            console.error("Error fetching AI queries:", error);
         }
     };
 
     const fetchQuickButtons = async () => {
         try {
-            const {
-                data,
-                error
-            } = await supabase.from('quick_buttons').select('*').order('created_at', {ascending: true});
+            const {data, error} = await supabase.from("quick_buttons").select("*").order("created_at", {ascending: true});
             if (error) throw error;
             setQuickButtons(data || []);
         } catch (error) {
-            console.error('Error fetching quick buttons:', error);
+            console.error("Error fetching quick buttons:", error);
         }
-    };
-
-    const showToast = (severity, summary, detail, life = 3000) => {
-        toast.current?.show({severity, summary, detail, life});
     };
 
     const addContentRow = async () => {
-        if (!content.trim() || !explanation.trim()) {
-            showToast("warn", "Validation", "Please fill in all fields", 2000);
-            return;
-        }
+        if (!content.trim() || !explanation.trim()) return showToast("warn", "Validation", "Please fill in all fields", 2000);
         try {
-            const {data, error} = await supabase.from('learning_items').insert([{
-                label: labelToAdd,
-                content: content.trim(),
-                explanation: explanation.trim(),
-                last_repeat_date: new Date().toISOString(),
-                number_of_repeats: 0,
+            const {data, error} = await supabase.from("learning_items").insert([{
+                label: labelToAdd, content: content.trim(), explanation: explanation.trim(),
+                last_repeat_date: new Date().toISOString(), number_of_repeats: 0,
             }]).select().single();
             if (error) throw error;
-            setRows(prevRows => [{
-                ...data,
-                statusLabel: getStatusLabel(data.last_repeat_date),
-                repeatsLabel: getRepeatsLabel(data.number_of_repeats)
-            }, ...prevRows]);
+            setRows(prev => [decorate(data), ...prev]);
             setContent("");
             setExplanation("");
             showToast("success", "Success", "Content item added", 2000);
         } catch (error) {
-            console.error('Error adding content:', error);
+            console.error("Error adding content:", error);
             showToast("error", "Error", "Failed to add content item");
         }
     };
 
     const addRequestRow = async () => {
-        if (!requestQuery.trim() || !customActionName.trim()) {
-            showToast("warn", "Validation", "Please enter action name and query", 2000);
-            return;
-        }
+        if (!requestQuery.trim() || !customActionName.trim()) return showToast("warn", "Validation", "Please enter action name and query", 2000);
         try {
-            const actionKey = customActionName.trim().toLowerCase().replace(/\s+/g, '_');
-            const {error} = await supabase.from('ai_action_queries').insert([{
+            const {error} = await supabase.from("ai_action_queries").insert([{
                 label: labelForRequest,
-                action_key: actionKey,
+                action_key: customActionName.trim().toLowerCase().replace(/\s+/g, "_"),
                 query_text: requestQuery.trim(),
             }]).select().single();
             if (error) throw error;
@@ -285,20 +242,16 @@ export default function LearningTable() {
             setCustomActionName("");
             showToast("success", "Success", "Custom AI action added", 2000);
         } catch (error) {
-            console.error('Error adding AI request:', error);
+            console.error("Error adding AI request:", error);
             showToast("error", "Error", "Failed to add custom AI action");
         }
     };
 
     const addQuickButton = async () => {
-        if (!newButtonName.trim() || !newButtonQuery.trim()) {
-            showToast("warn", "Validation", "Please fill button name and query", 2000);
-            return;
-        }
+        if (!newButtonName.trim() || !newButtonQuery.trim()) return showToast("warn", "Validation", "Please fill button name and query", 2000);
         try {
-            const {data, error} = await supabase.from('quick_buttons').insert([{
-                name: newButtonName.trim(),
-                query: newButtonQuery.trim(),
+            const {data, error} = await supabase.from("quick_buttons").insert([{
+                name: newButtonName.trim(), query: newButtonQuery.trim(),
             }]).select().single();
             if (error) throw error;
             setQuickButtons(prev => [...prev, data]);
@@ -306,280 +259,220 @@ export default function LearningTable() {
             setNewButtonQuery("");
             showToast("success", "Success", "Quick button added", 2000);
         } catch (error) {
-            console.error('Error adding quick button:', error);
+            console.error("Error adding quick button:", error);
             showToast("error", "Error", "Failed to add quick button");
         }
     };
 
-    const deleteQuickButton = async (id) => {
+    const deleteQuickButton = async id => {
         try {
-            const {error} = await supabase.from('quick_buttons').delete().eq('id', id);
+            const {error} = await supabase.from("quick_buttons").delete().eq("id", id);
             if (error) throw error;
             setQuickButtons(prev => prev.filter(b => b.id !== id));
             showToast("info", "Deleted", "Quick button removed", 1500);
         } catch (error) {
-            console.error('Error deleting quick button:', error);
+            console.error("Error deleting quick button:", error);
             showToast("error", "Error", "Failed to delete button");
         }
     };
 
-    const openQuickButtonChatGPT = (query) => {
-        if (!content.trim()) {
-            showToast("warn", "Missing Content", "Enter a word or phrase before using Quick Actions");
-            return;
-        }
-        const queryText = `${content.trim()} - ${query.trim()}`;
-        window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
+    const openQuickButtonChatGPT = query => {
+        if (!content.trim()) return showToast("warn", "Missing Content", "Enter a word or phrase before using Quick Actions");
+        openChatGPTUrl(`${content.trim()} - ${query.trim()}`);
     };
 
-    const deleteCustomAiAction = async (actionId) => {
+    const deleteCustomAiAction = async actionId => {
         try {
-            const {error} = await supabase.from('ai_action_queries').delete().eq('id', actionId);
+            const {error} = await supabase.from("ai_action_queries").delete().eq("id", actionId);
             if (error) throw error;
             await fetchAiQueries();
             showToast("info", "Deleted", "Custom action removed", 1500);
         } catch (error) {
-            console.error('Error deleting custom action:', error);
+            console.error("Error deleting custom action:", error);
             showToast("error", "Error", "Failed to delete action");
         }
     };
 
-    const deleteRow = async (rowData) => {
-        const isBulk = selectedRows.length > 0 && selectedRows.some(r => r.id === rowData.id);
-        const targets = isBulk ? selectedRows : [rowData];
-
-        const message = isBulk
-            ? `Delete ${targets.length} selected items?\n\n${targets.map(r => `• ${r.content}`).join('\n')}`
-            : `Delete "${rowData.content}"?`;
-
-        if (!window.confirm(message)) return;
-
+    const deleteItems = async (targets, bulkMsg, singleMsg, errLog) => {
         try {
             const ids = targets.map(r => r.id);
-            const {error} = await supabase.from('learning_items').delete().in('id', ids);
+            const {error} = await supabase.from("learning_items").delete().in("id", ids);
             if (error) throw error;
-            setRows(prevRows => prevRows.filter(r => !ids.includes(r.id)));
+            setRows(prev => prev.filter(r => !ids.includes(r.id)));
             setSelectedRows([]);
-            showToast("info", "Deleted", isBulk ? `${ids.length} items removed` : "Item removed", 1500);
+            showToast("info", "Deleted", bulkMsg ? `${ids.length} items removed` : singleMsg, 1500);
         } catch (error) {
-            console.error('Error deleting row(s):', error);
-            showToast("error", "Error", "Failed to delete item(s)");
+            console.error(errLog, error);
+            showToast("error", "Error", bulkMsg && !singleMsg ? "Failed to delete items" : "Failed to delete item(s)");
         }
+    };
+
+    const deleteRow = async rowData => {
+        const isBulk = selectedRows.length > 0 && selectedRows.some(r => r.id === rowData.id);
+        const targets = isBulk ? selectedRows : [rowData];
+        const message = isBulk
+            ? `Delete ${targets.length} selected items?\n\n${targets.map(r => `• ${r.content}`).join("\n")}`
+            : `Delete "${rowData.content}"?`;
+        if (!window.confirm(message)) return;
+        await deleteItems(targets, isBulk, "Item removed", "Error deleting row(s):");
     };
 
     const deleteSelectedRows = async () => {
         if (!selectedRows || selectedRows.length === 0) return;
-
-        const message = `Delete ${selectedRows.length} selected items?\n\n${selectedRows.map(r => `• ${r.content}`).join('\n')}`;
+        const message = `Delete ${selectedRows.length} selected items?\n\n${selectedRows.map(r => `• ${r.content}`).join("\n")}`;
         if (!window.confirm(message)) return;
-
-        try {
-            const ids = selectedRows.map(r => r.id);
-            const {error} = await supabase.from('learning_items').delete().in('id', ids);
-            if (error) throw error;
-            setRows(prevRows => prevRows.filter(r => !ids.includes(r.id)));
-            setSelectedRows([]);
-            showToast("info", "Deleted", `${ids.length} items removed`, 1500);
-        } catch (error) {
-            console.error('Error deleting selected rows:', error);
-            showToast("error", "Error", "Failed to delete items");
-        }
+        await deleteItems(selectedRows, true, null, "Error deleting selected rows:");
     };
 
-    const incrementRepeats = async (rowData) => {
+    const incrementRepeats = async rowData => {
         const now = new Date();
         const lastIncrement = rowData.last_increment ? new Date(rowData.last_increment) : null;
-
-        if (lastIncrement && now - lastIncrement < 15 * 60 * 1000) {
-            showToast("warn", "Too Soon", "Increment once every 15 min", 2000);
-            return;
-        }
-
-        if (window.confirm(`Increment repeat count for "${rowData.content}"?`)) {
-            try {
-                const newCount = rowData.number_of_repeats + 1;
-
-                const {error} = await supabase
-                    .from('learning_items')
-                    .update({
-                        number_of_repeats: newCount,
-                        last_repeat_date: now.toISOString(),
-                        last_increment: now.toISOString(),
-                        updated_at: now.toISOString()
-                    })
-                    .eq('id', rowData.id);
-
-                if (error) throw error;
-
-                // Use functional setState to avoid stale closures
-                setRows((prevRows) => prevRows.map(r =>
-                    r.id === rowData.id
-                        ? {
-                            ...r,
-                            number_of_repeats: newCount,
-                            last_repeat_date: now.toISOString(),
-                            last_increment: now.toISOString(),
-                            repeatsLabel: getRepeatsLabel(newCount),
-                            statusLabel: getStatusLabel(now.toISOString())
-                        }
-                        : r
-                ));
-
-                showToast("success", "Incremented", `New count: ${newCount}`, 1500);
-            } catch (error) {
-                console.error('Error incrementing:', error);
-                showToast("error", "Error", "Failed to update");
-            }
+        if (lastIncrement && now - lastIncrement < 15 * 60 * 1000) return showToast("warn", "Too Soon", "Increment once every 15 min", 2000);
+        if (!window.confirm(`Increment repeat count for "${rowData.content}"?`)) return;
+        try {
+            const newCount = rowData.number_of_repeats + 1;
+            const iso = now.toISOString();
+            const {error} = await supabase.from("learning_items").update({
+                number_of_repeats: newCount, last_repeat_date: iso, last_increment: iso, updated_at: iso
+            }).eq("id", rowData.id);
+            if (error) throw error;
+            setRows(prev => prev.map(r => r.id === rowData.id ? {
+                ...r, number_of_repeats: newCount, last_repeat_date: iso, last_increment: iso,
+                repeatsLabel: getRepeatsLabel(newCount), statusLabel: getStatusLabel(iso)
+            } : r));
+            showToast("success", "Incremented", `New count: ${newCount}`, 1500);
+        } catch (error) {
+            console.error("Error incrementing:", error);
+            showToast("error", "Error", "Failed to update");
         }
     };
 
-    const onRowEditComplete = async (e) => {
+    const onRowEditComplete = async e => {
         const {newData} = e;
         try {
-            const {error} = await supabase.from('learning_items').update({
-                label: newData.label,
-                content: newData.content,
-                explanation: newData.explanation,
+            const {error} = await supabase.from("learning_items").update({
+                label: newData.label, content: newData.content, explanation: newData.explanation,
                 updated_at: new Date().toISOString()
-            }).eq('id', newData.id);
-
+            }).eq("id", newData.id);
             if (error) throw error;
-            setRows(prevRows => prevRows.map(r => r.id === newData.id ? newData : r));
+            setRows(prev => prev.map(r => r.id === newData.id ? newData : r));
             showToast("success", "Updated", "Item updated successfully", 1500);
         } catch (error) {
-            console.error('Error updating row:', error);
+            console.error("Error updating row:", error);
             showToast("error", "Error", "Failed to update item");
         }
     };
 
-    const buildChatGPTQuery = ({content, explanation, queryTemplate}) => {
-        const isSpecialExplanation = isImageUrl(explanation) || isHtmlContent(explanation);
-        if (!queryTemplate) {
-            return isSpecialExplanation ? `${content}` : `${content} - ${explanation}`;
-        }
-        let resolvedQuery = queryTemplate.replace(/{content}/g, content).replace(/{explanation}/g, explanation || "");
-        return isSpecialExplanation ? `${content} | ${resolvedQuery}` : `${content} - ${explanation} | ${resolvedQuery}`;
-    };
-
     const openChatGPT = (content, explanation, actionKey = null) => {
-        let queryTemplate = null;
-        if (actionKey && aiQueries[selectedRow?.label]?.[actionKey]) {
-            queryTemplate = aiQueries[selectedRow.label][actionKey];
-        }
-        const queryText = buildChatGPTQuery({content, explanation, queryTemplate});
-        window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
+        const queryTemplate = actionKey ? aiQueries[selectedRow?.label]?.[actionKey] || null : null;
+        openChatGPTUrl(buildChatGPTQuery({content, explanation, queryTemplate}));
     };
 
-    const openGame = (row) => {
+    const openGame = row => {
         setGameModalData({...row, combinedText: `${row.content} - ${row.explanation}`});
         setGameModalVisible(true);
     };
 
-    const orderBody = (rowData) => rows.findIndex(r => r.id === rowData.id) + 1;
-
-    const labelBody = (rowData) => {
-        const color = LABELS.find(l => l.value === rowData.label)?.color || "#000";
-        return <Tag value={rowData.label} severity={getSeverity(rowData.label)}
-                    style={{backgroundColor: color, color: "white"}}/>;
+    const closeGame = () => {
+        setGameModalVisible(false);
+        setGameModalData(null);
     };
 
-    const statusBodyTemplate = (rowData) => {
-        const statusConfig = STATUS_LABELS.find(s => s.name === rowData.statusLabel);
-        return <span style={{
-            padding: '5px 10px',
-            borderRadius: '4px',
-            color: 'white',
-            backgroundColor: statusConfig?.color,
-            fontWeight: 'bold'
-        }}>{timeDiffString(rowData.last_repeat_date)}</span>;
-    };
-
-    const quantityBodyTemplate = (rowData) => {
-        const repeatsConfig = REPEATS_LABELS.find(r => rowData.number_of_repeats >= r.min && rowData.number_of_repeats <= r.max);
-        return (
-            <div style={{display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center'}}>
-            <span
-                style={{
-                    display: 'inline-block',
-                    width: 30,
-                    height: 30,
-                    lineHeight: '30px',
-                    borderRadius: '50%',
-                    textAlign: 'center',
-                    fontWeight: 'bold',
-                    color: 'white',
-                    backgroundColor: repeatsConfig?.color,
-                    cursor: 'not-allowed'
+    const customActionMenuItem = act => ({
+        label: act.text,
+        icon: "pi pi-arrow-right",
+        items: [
+            {label: "Open", icon: "pi pi-external-link", command: () => openChatGPT(selectedRow.content, selectedRow.explanation, act.key)},
+            {label: "Delete", icon: "pi pi-trash", command: () => {
+                    if (window.confirm(`Delete custom action "${act.text}"?`)) deleteCustomAiAction(act.id);
                 }}
-            >
-                {rowData.number_of_repeats}
-            </span>
-                <Button
-                    label="++"
-                    onClick={() => incrementRepeats(rowData)}
-                    size="small"
-                    style={{
-                        padding: '4px 8px',
-                        fontSize: '0.75rem',
-                        minWidth: 'auto',
-                        backgroundColor: repeatsConfig?.color,
-                        borderColor: repeatsConfig?.color,
-                        color: 'white',
-                        cursor: 'pointer',
-                        transition: 'background-color 0.2s, border-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => {
-                        if (rowData.number_of_repeats === 1) {
-                            e.currentTarget.style.backgroundColor = '#FF4500';
-                            e.currentTarget.style.borderColor = '#FF4500';
-                        } else if (rowData.number_of_repeats === 3) {
-                            e.currentTarget.style.backgroundColor = '#FFA500';
-                            e.currentTarget.style.borderColor = '#FFA500';
-                        } else if (rowData.number_of_repeats === 5) {
-                            e.currentTarget.style.backgroundColor = '#006400';
-                            e.currentTarget.style.borderColor = '#006400';
-                        } else {
-                            e.currentTarget.style.backgroundColor = '#000';
-                            e.currentTarget.style.borderColor = '#000';
-                        }
-                    }}
-                    onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = repeatsConfig?.color;
-                        e.currentTarget.style.borderColor = repeatsConfig?.color;
-                    }}
-                />
+        ]
+    });
+
+    const menuModel = selectedRow ? (() => {
+        const customActions = customAiActions[selectedRow.label] || [];
+        const hasImageOrTable = isImageUrl(selectedRow.explanation) || isHtmlContent(selectedRow.explanation);
+        if (selectedRow.label === "word" && !hasImageOrTable) {
+            return [{
+                label: isDesktop ? "Practice (Typing Trainer)" : "Practice (Spell Game)",
+                icon: "pi pi-play",
+                command: () => openGame(selectedRow)
+            }, ...customActions.map(customActionMenuItem)];
+        }
+        if (customActions.length > 0) return customActions.map(customActionMenuItem);
+        return [{label: "No actions available", icon: "pi pi-ban", disabled: true}];
+    })() : [];
+
+    const getQuickButtonColor = name => {
+        const lower = (name || "").toLowerCase();
+        for (const key of ["word", "rule", "topic"]) if (lower.includes(key)) return labelColor(key);
+        return "#000";
+    };
+
+    const orderBody = rowData => rows.findIndex(r => r.id === rowData.id) + 1;
+
+    const labelBody = rowData => (
+        <Tag value={rowData.label} severity={getSeverity(rowData.label)}
+             style={{backgroundColor: labelColor(rowData.label), color: "white"}}/>
+    );
+
+    const statusBodyTemplate = rowData => (
+        <span style={{
+            padding: "5px 10px", borderRadius: "4px", color: "white",
+            backgroundColor: STATUS_LABELS.find(s => s.name === rowData.statusLabel)?.color, fontWeight: "bold"
+        }}>{timeDiffString(rowData.last_repeat_date)}</span>
+    );
+
+    const quantityBodyTemplate = rowData => {
+        const color = REPEATS_LABELS.find(r => rowData.number_of_repeats >= r.min && rowData.number_of_repeats <= r.max)?.color;
+        const hoverColor = {1: "#FF4500", 3: "#FFA500", 5: "#006400"}[rowData.number_of_repeats] || "#000";
+        return (
+            <div style={{display: "flex", alignItems: "center", gap: "8px", justifyContent: "center"}}>
+                <span style={{
+                    display: "inline-block", width: 30, height: 30, lineHeight: "30px", borderRadius: "50%",
+                    textAlign: "center", fontWeight: "bold", color: "white", backgroundColor: color, cursor: "not-allowed"
+                }}>{rowData.number_of_repeats}</span>
+                <Button label="++" onClick={() => incrementRepeats(rowData)} size="small"
+                        style={{
+                            padding: "4px 8px", fontSize: "0.75rem", minWidth: "auto", backgroundColor: color,
+                            borderColor: color, color: "white", cursor: "pointer",
+                            transition: "background-color 0.2s, border-color 0.2s"
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.backgroundColor = hoverColor;
+                            e.currentTarget.style.borderColor = hoverColor;
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.backgroundColor = color;
+                            e.currentTarget.style.borderColor = color;
+                        }}/>
             </div>
         );
     };
 
-    const contentBodyTemplate = (rowData) => (
-        <div onClick={() => {
-            const queryText = buildChatGPTQuery({
-                content: rowData.content,
-                explanation: rowData.explanation,
-                queryTemplate: null
-            });
-            window.open(`https://chat.openai.com/?q=${encodeURIComponent(queryText)}`, "_blank");
-        }} style={{cursor: 'pointer', color: '#2196F3', textDecoration: 'underline'}}>
+    const contentBodyTemplate = rowData => (
+        <div onClick={() => openChatGPTUrl(buildChatGPTQuery({content: rowData.content, explanation: rowData.explanation, queryTemplate: null}))}
+             style={{cursor: "pointer", color: "#2196F3", textDecoration: "underline"}}>
             {rowData.content}
         </div>
     );
 
-    const explanationBodyTemplate = (rowData) => {
-        const text = rowData.explanation || '';
-        const labelColor = LABELS.find(l => l.value === rowData.label)?.color || "#6b7280";
+    const explanationBodyTemplate = rowData => {
+        const text = rowData.explanation || "";
+        const color = labelColor(rowData.label, "#6b7280");
         if (isImageUrl(text)) {
             return (
                 <img src={text.trim()} alt="Explanation"
-                     style={{maxWidth: '200px', maxHeight: '100px', cursor: 'pointer', objectFit: 'contain'}}
+                     style={{maxWidth: "200px", maxHeight: "100px", cursor: "pointer", objectFit: "contain"}}
                      onClick={() => {
                          setCurrentImage(text.trim());
                          setImageError(false);
                          setImageModalVisible(true);
-                     }} onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.parentNode.innerHTML = '<span style="color: red;">Image cannot be reached</span>';
-                }}/>
+                     }}
+                     onError={e => {
+                         e.target.style.display = "none";
+                         e.target.parentNode.innerHTML = '<span style="color: red;">Image cannot be reached</span>';
+                     }}/>
             );
         }
         if (isHtmlContent(text)) {
@@ -587,210 +480,71 @@ export default function LearningTable() {
                 <Button label="Open Rule" size="small" onClick={() => {
                     setCurrentTableHtml(text);
                     setTableModalVisible(true);
-                }} style={{
-                    padding: '6px 12px',
-                    fontSize: '0.875rem',
-                    backgroundColor: labelColor,
-                    borderColor: labelColor,
-                    color: '#fff'
-                }}/>
+                }} style={{padding: "6px 12px", fontSize: "0.875rem", backgroundColor: color, borderColor: color, color: "#fff"}}/>
             );
         }
-        return (
-            <b
-                style={{
-                    cursor: 'pointer',
-                    color: 'black'
-                }}
-                title="Start practice"
-                onClick={() => openGame(rowData)}
-            >
-                {text}
-            </b>
-        );
+        return <b style={{cursor: "pointer", color: "black"}} title="Start practice" onClick={() => openGame(rowData)}>{text}</b>;
     };
 
-    const labelEditor = (options) => {
-        return (
-            <Dropdown
-                value={options.value}
-                options={LABELS}
-                optionLabel="label"
-                optionValue="value"
-                onChange={(e) => options.editorCallback(e.value)}
-                itemTemplate={(option) => (
-                    <div
-                        style={{
-                            backgroundColor: option.color,
-                            color: 'white',
-                            padding: '4px 8px',
-                            borderRadius: 4,
-                            fontWeight: 500
-                        }}
-                    >
-                        {option.label}
-                    </div>
-                )}
-                valueTemplate={(option) =>
-                    option ? (
-                        <div
-                            style={{
-                                backgroundColor: option.color,
-                                color: 'white',
-                                padding: '4px 8px',
-                                borderRadius: 4,
-                                fontWeight: 500
-                            }}
-                        >
-                            {option.label}
-                        </div>
-                    ) : null
-                }
-                style={{minWidth: '8rem'}}
-            />
-        );
-    };
+    const labelEditor = options => (
+        <Dropdown value={options.value} options={LABELS} optionLabel="label" optionValue="value"
+                  onChange={e => options.editorCallback(e.value)}
+                  itemTemplate={option => <ColorChip color={option.color}>{option.label}</ColorChip>}
+                  valueTemplate={option => option ? <ColorChip color={option.color}>{option.label}</ColorChip> : null}
+                  style={{minWidth: "8rem"}}/>
+    );
 
-    const textEditor = (options) => <InputText type="text" value={options.value}
-                                               onChange={(e) => options.editorCallback(e.target.value)}
-                                               style={{width: '100%'}}/>;
+    const textEditor = options => (
+        <InputText type="text" value={options.value} onChange={e => options.editorCallback(e.target.value)} style={{width: "100%"}}/>
+    );
 
-    const createFilterTemplate = (items, colorKey) => (options) => (
-        <div style={{position: 'relative'}}>
+    const dropdownClear = options => options.value && (
+        <ClearIcon onClick={() => options.filterApplyCallback(null)} right="35px" color="#6c757d" size="0.9rem" char={<i className="pi pi-times"/>}/>
+    );
+
+    const createFilterTemplate = (items, colorKey) => options => (
+        <div style={{position: "relative"}}>
             <Dropdown value={options.value} options={items.map(s => ({label: s.name, value: s.name}))}
                       optionLabel="label" placeholder={`Select ${colorKey}`}
-                      onChange={(e) => options.filterApplyCallback(e.value)} itemTemplate={(option) => <div style={{
-                backgroundColor: items.find(s => s.name === option.value)?.[colorKey],
-                color: "white",
-                padding: "4px 8px",
-                borderRadius: 4
-            }}>{option.label}</div>} style={{minWidth: "150px"}}/>
-            {options.value && <i className="pi pi-times" style={{
-                position: 'absolute',
-                right: '35px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                color: '#6c757d'
-            }} onClick={() => options.filterApplyCallback(null)}/>}
+                      onChange={e => options.filterApplyCallback(e.value)}
+                      itemTemplate={option => <div style={{
+                          backgroundColor: items.find(s => s.name === option.value)?.[colorKey],
+                          color: "white", padding: "4px 8px", borderRadius: 4
+                      }}>{option.label}</div>}
+                      style={{minWidth: "150px"}}/>
+            {dropdownClear(options)}
         </div>
     );
 
-    const labelFilterTemplate = (options) => (
-        <div style={{position: 'relative'}}>
+    const labelFilterTemplate = options => (
+        <div style={{position: "relative"}}>
             <Dropdown value={options.value} options={LABELS} optionLabel="label" optionValue="value"
-                      placeholder="Select Label" onChange={(e) => options.filterApplyCallback(e.value)}
-                      itemTemplate={(option) => <div style={{
-                          backgroundColor: option.color || "#fff",
-                          color: "white",
-                          padding: "4px 8px",
-                          borderRadius: 4
-                      }}>{option.label}</div>} style={{minWidth: "150px"}}/>
-            {options.value && <i className="pi pi-times" style={{
-                position: 'absolute',
-                right: '35px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                cursor: 'pointer',
-                fontSize: '0.9rem',
-                color: '#6c757d'
-            }} onClick={() => options.filterApplyCallback(null)}/>}
+                      placeholder="Select Label" onChange={e => options.filterApplyCallback(e.value)}
+                      itemTemplate={option => <div style={{
+                          backgroundColor: option.color || "#fff", color: "white", padding: "4px 8px", borderRadius: 4
+                      }}>{option.label}</div>}
+                      style={{minWidth: "150px"}}/>
+            {dropdownClear(options)}
         </div>
     );
 
-    const textFilterTemplate = (options) => (
+    const textFilterTemplate = options => (
         <div style={{position: "relative", width: "100%"}}>
-            <InputText value={options.value || ""} onChange={(e) => options.filterApplyCallback(e.target.value)}
+            <InputText value={options.value || ""} onChange={e => options.filterApplyCallback(e.target.value)}
                        placeholder={options.filterPlaceholder} style={{width: "100%"}}/>
-            {options.value && <i className="pi pi-times" style={{
-                position: "absolute",
-                right: "8px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                cursor: "pointer",
-                color: "#6c757d"
-            }} onClick={() => options.filterApplyCallback("")}/>}
+            {options.value && <ClearIcon onClick={() => options.filterApplyCallback("")} right="8px" color="#6c757d" char={<i className="pi pi-times"/>}/>}
         </div>
     );
 
-    const statusSortFunction = (event) => [...event.data].sort((a, b) => event.order * (new Date() - new Date(a.last_repeat_date) - (new Date() - new Date(b.last_repeat_date))));
+    const statusSortFunction = event => [...event.data].sort((a, b) => event.order * (new Date() - new Date(a.last_repeat_date) - (new Date() - new Date(b.last_repeat_date))));
 
-    const menuModel = selectedRow ? (() => {
-        const customActions = customAiActions[selectedRow.label] || [];
-        const hasImageOrTable = isImageUrl(selectedRow.explanation) || isHtmlContent(selectedRow.explanation);
-        if (selectedRow.label === 'word' && !hasImageOrTable) {
-            const menu = [{
-                label: isDesktop ? 'Practice (Typing Trainer)' : 'Practice (Spell Game)',
-                icon: 'pi pi-play',
-                command: () => openGame(selectedRow)
-            }];
-            customActions.forEach(act => {
-                menu.push({
-                    label: act.text,
-                    icon: 'pi pi-arrow-right',
-                    items: [
-                        {
-                            label: 'Open',
-                            icon: 'pi pi-external-link',
-                            command: () => openChatGPT(selectedRow.content, selectedRow.explanation, act.key)
-                        },
-                        {
-                            label: 'Delete', icon: 'pi pi-trash', command: () => {
-                                if (window.confirm(`Delete custom action "${act.text}"?`)) deleteCustomAiAction(act.id);
-                            }
-                        }
-                    ]
-                });
-            });
-            return menu;
-        }
-        if (customActions.length > 0) {
-            return customActions.map(act => ({
-                label: act.text,
-                icon: 'pi pi-arrow-right',
-                items: [
-                    {
-                        label: 'Open',
-                        icon: 'pi pi-external-link',
-                        command: () => openChatGPT(selectedRow.content, selectedRow.explanation, act.key)
-                    },
-                    {
-                        label: 'Delete', icon: 'pi pi-trash', command: () => {
-                            if (window.confirm(`Delete custom action "${act.text}"?`)) deleteCustomAiAction(act.id);
-                        }
-                    }
-                ]
-            }));
-        }
-        return [{label: 'No actions available', icon: 'pi pi-ban', disabled: true}];
-    })() : [];
+    if (loading) return <div style={{padding: 20, textAlign: "center"}}>Loading...</div>;
 
-    const getQuickButtonColor = (name) => {
-        if (!name) return "#000";
-
-        const lower = name.toLowerCase();
-
-        if (lower.includes("word")) {
-            return LABELS.find(l => l.value === "word")?.color || "#000";
-        }
-
-        if (lower.includes("rule")) {
-            return LABELS.find(l => l.value === "rule")?.color || "#000";
-        }
-
-        if (lower.includes("topic")) {
-            return LABELS.find(l => l.value === "topic")?.color || "#000";
-        }
-
-        return "#000";
-    };
-
-
-    if (loading) return <div style={{padding: 20, textAlign: 'center'}}>Loading...</div>;
+    const cardStyle = {padding: "1rem", backgroundColor: "white", borderRadius: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", border: "1px solid #e5e7eb"};
+    const cardTitleStyle = {fontSize: "1rem", fontWeight: "600", marginBottom: "0.75rem", color: "#1f2937"};
 
     return (
-        <div style={{padding: '10px', maxWidth: '100%', overflow: 'hidden'}}>
+        <div style={{padding: "10px", maxWidth: "100%", overflow: "hidden"}}>
             <Toast ref={toast}/>
             <ContextMenu model={menuModel} ref={cm}/>
 
@@ -819,60 +573,28 @@ export default function LearningTable() {
             `}</style>
 
             <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem',
-                width: '100%',
-                padding: '1rem',
-                backgroundColor: '#f9fafb',
-                borderRadius: '1rem',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                marginBottom: '1rem'
+                display: "flex", flexDirection: "column", gap: "1rem", width: "100%", padding: "1rem",
+                backgroundColor: "#f9fafb", borderRadius: "1rem", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", marginBottom: "1rem"
             }}>
                 {[
                     {
-                        title: "Add Content Item",
-                        label: labelToAdd,
-                        setLabel: setLabelToAdd,
-                        inputs: [{val: content, set: setContent, ph: "Content"}, {
-                            val: explanation,
-                            set: setExplanation,
-                            ph: "Explanation"
-                        }],
-                        btnText: "Add",
-                        action: addContentRow
+                        title: "Add Content Item", label: labelToAdd, setLabel: setLabelToAdd,
+                        inputs: [{val: content, set: setContent, ph: "Content"}, {val: explanation, set: setExplanation, ph: "Explanation"}],
+                        btnText: "Add", action: addContentRow
                     },
                     {
-                        title: "Add Custom AI Action",
-                        label: labelForRequest,
-                        setLabel: setLabelForRequest,
-                        inputs: [{
-                            val: customActionName,
-                            set: setCustomActionName,
-                            ph: "Action name"
-                        }, {val: requestQuery, set: setRequestQuery, ph: "Query (use {content} and {explanation})"}],
-                        btnText: "Add Action",
-                        action: addRequestRow
+                        title: "Add Custom AI Action", label: labelForRequest, setLabel: setLabelForRequest,
+                        inputs: [{val: customActionName, set: setCustomActionName, ph: "Action name"}, {val: requestQuery, set: setRequestQuery, ph: "Query (use {content} and {explanation})"}],
+                        btnText: "Add Action", action: addRequestRow
                     }
                 ].map((section, idx) => {
                     const activeColor = LABELS.find(l => l.value === section.label)?.color;
                     return (
-                        <div key={idx} style={{
-                            padding: '1rem',
-                            backgroundColor: 'white',
-                            borderRadius: '0.75rem',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                            border: '1px solid #e5e7eb'
-                        }}>
-                            <h2 style={{
-                                fontSize: '1rem',
-                                fontWeight: '600',
-                                marginBottom: '0.75rem',
-                                color: '#1f2937'
-                            }}>{section.title}</h2>
-                            <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'flex-end'}}>
-                                <div style={{minWidth: '150px', flexShrink: 0}}>
-                                    <SelectButton value={section.label} onChange={(e) => section.setLabel(e.value)}
+                        <div key={idx} style={cardStyle}>
+                            <h2 style={cardTitleStyle}>{section.title}</h2>
+                            <div style={{display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "flex-end"}}>
+                                <div style={{minWidth: "150px", flexShrink: 0}}>
+                                    <SelectButton value={section.label} onChange={e => section.setLabel(e.value)}
                                                   options={LABELS} optionLabel="label" optionValue="value" pt={{
                                         button: ({context}) => ({
                                             style: {
@@ -888,242 +610,134 @@ export default function LearningTable() {
                                     }}/>
                                 </div>
                                 {section.inputs.map((inp, i) => (
-                                    <div key={i} style={{position: 'relative', flex: '1 1 200px', minWidth: '150px'}}>
-                                        <InputText placeholder={inp.ph} value={inp.val}
-                                                   onChange={(e) => inp.set(e.target.value)} style={{
-                                            width: '100%',
-                                            borderColor: activeColor,
-                                            boxShadow: `0 0 0 1px ${activeColor}`,
-                                            paddingRight: '2rem'
-                                        }}/>
-                                        {inp.val && <button onClick={() => inp.set("")} style={{
-                                            position: "absolute",
-                                            right: "0.5rem",
-                                            top: "50%",
-                                            transform: "translateY(-50%)",
-                                            color: "#777",
-                                            background: "transparent",
-                                            border: "none",
-                                            cursor: "pointer",
-                                            fontSize: "14px"
-                                        }}>✕</button>}
+                                    <div key={i} style={{position: "relative", flex: "1 1 200px", minWidth: "150px"}}>
+                                        <InputText placeholder={inp.ph} value={inp.val} onChange={e => inp.set(e.target.value)}
+                                                   style={{width: "100%", borderColor: activeColor, boxShadow: `0 0 0 1px ${activeColor}`, paddingRight: "2rem"}}/>
+                                        {inp.val && <ClearIcon onClick={() => inp.set("")}/>}
                                     </div>
                                 ))}
-                                <Button icon="pi pi-plus" label={section.btnText} onClick={section.action} style={{
-                                    backgroundColor: activeColor,
-                                    borderColor: activeColor,
-                                    flexShrink: 0
-                                }}/>
+                                <Button icon="pi pi-plus" label={section.btnText} onClick={section.action}
+                                        style={{backgroundColor: activeColor, borderColor: activeColor, flexShrink: 0}}/>
                             </div>
                         </div>
                     );
                 })}
 
-                <div style={{
-                    padding: '1rem',
-                    backgroundColor: 'white',
-                    borderRadius: '0.75rem',
-                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                    border: '1px solid #e5e7eb'
-                }}>
-                    <h2 style={{fontSize: '1rem', fontWeight: '600', marginBottom: '0.75rem', color: '#1f2937'}}>Quick
-                        ChatGPT Buttons</h2>
-                    <div style={{
-                        display: 'flex',
-                        flexWrap: 'wrap',
-                        gap: '0.75rem',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        marginBottom: '1rem'
-                    }}>
-                        <div style={{position: 'relative', flex: '1 1 200px', minWidth: '150px'}}>
-                            <InputText placeholder="Button name" value={newButtonName}
-                                       onChange={(e) => setNewButtonName(e.target.value)}
-                                       style={{width: '100%', paddingRight: '2rem'}}/>
-                            {newButtonName && <button onClick={() => setNewButtonName("")} style={{
-                                position: "absolute",
-                                right: "0.5rem",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                color: "#777",
-                                background: "transparent",
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: "14px"
-                            }}>✕</button>}
-                        </div>
-                        <div style={{position: 'relative', flex: '1 1 200px', minWidth: '150px'}}>
-                            <InputText placeholder="Query text" value={newButtonQuery}
-                                       onChange={(e) => setNewButtonQuery(e.target.value)}
-                                       style={{width: '100%', paddingRight: '2rem'}}/>
-                            {newButtonQuery && <button onClick={() => setNewButtonQuery("")} style={{
-                                position: "absolute",
-                                right: "0.5rem",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                color: "#777",
-                                background: "transparent",
-                                border: "none",
-                                cursor: "pointer",
-                                fontSize: "14px"
-                            }}>✕</button>}
-                        </div>
+                <div style={cardStyle}>
+                    <h2 style={cardTitleStyle}>Quick ChatGPT Buttons</h2>
+                    <div style={{display: "flex", flexWrap: "wrap", gap: "0.75rem", alignItems: "center", justifyContent: "center", marginBottom: "1rem"}}>
+                        {[
+                            {val: newButtonName, set: setNewButtonName, ph: "Button name"},
+                            {val: newButtonQuery, set: setNewButtonQuery, ph: "Query text"}
+                        ].map((inp, i) => (
+                            <div key={i} style={{position: "relative", flex: "1 1 200px", minWidth: "150px"}}>
+                                <InputText placeholder={inp.ph} value={inp.val} onChange={e => inp.set(e.target.value)}
+                                           style={{width: "100%", paddingRight: "2rem"}}/>
+                                {inp.val && <ClearIcon onClick={() => inp.set("")}/>}
+                            </div>
+                        ))}
                         <Button icon="pi pi-plus" label="Add Button" onClick={addQuickButton}
-                                style={{backgroundColor: '#6366f1', borderColor: '#6366f1', flexShrink: 0}}/>
+                                style={{backgroundColor: "#6366f1", borderColor: "#6366f1", flexShrink: 0}}/>
                     </div>
-                    <div style={{display: 'flex', flexWrap: 'wrap', gap: '0.5rem'}}>
-                        {quickButtons.map((btn) => {
+                    <div style={{display: "flex", flexWrap: "wrap", gap: "0.5rem"}}>
+                        {quickButtons.map(btn => {
                             const bgColor = getQuickButtonColor(btn.name);
-
                             return (
-                                <div key={btn.id} style={{position: 'relative', display: 'inline-block'}}>
-                                    <Button
-                                        label={btn.name}
-                                        onClick={() => openQuickButtonChatGPT(btn.query)}
-                                        style={{
-                                            backgroundColor: bgColor,
-                                            borderColor: bgColor,
-                                            color: '#fff',
-                                            paddingRight: '2rem'
-                                        }}
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            if (window.confirm(`Delete button "${btn.name}"?`))
-                                                deleteQuickButton(btn.id);
-                                        }}
-                                        style={{
-                                            position: 'absolute',
-                                            right: '0.5rem',
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            color: 'white',
-                                            background: 'transparent',
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            fontSize: '16px',
-                                            fontWeight: 'bold'
-                                        }}
-                                    >
-                                        ×
-                                    </button>
+                                <div key={btn.id} style={{position: "relative", display: "inline-block"}}>
+                                    <Button label={btn.name} onClick={() => openQuickButtonChatGPT(btn.query)}
+                                            style={{backgroundColor: bgColor, borderColor: bgColor, color: "#fff", paddingRight: "2rem"}}/>
+                                    <ClearIcon char="×" color="white" size="16px" weight="bold"
+                                               onClick={() => {
+                                                   if (window.confirm(`Delete button "${btn.name}"?`)) deleteQuickButton(btn.id);
+                                               }}/>
                                 </div>
                             );
                         })}
-
                         {quickButtons.length === 0 &&
-                            <p style={{color: '#6b7280', fontStyle: 'italic', margin: 0}}>No quick buttons yet. Add one
-                                above!</p>}
+                            <p style={{color: "#6b7280", fontStyle: "italic", margin: 0}}>No quick buttons yet. Add one above!</p>}
                     </div>
                 </div>
             </div>
 
-            <div style={{marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap'}}>
-                <ToggleButton onLabel="All Items" offLabel="Spaced Repetition" onIcon="pi pi-list"
-                              offIcon="pi pi-calendar" checked={showAllItems} onChange={(e) => setShowAllItems(e.value)}
-                              style={{width: '200px'}}/>
+            <div style={{marginBottom: "1rem", display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap"}}>
+                <ToggleButton onLabel="All Items" offLabel="Spaced Repetition" onIcon="pi pi-list" offIcon="pi pi-calendar"
+                              checked={showAllItems} onChange={e => setShowAllItems(e.value)} style={{width: "200px"}}/>
                 {selectedRows.length > 1 && (
-                    <Button
-                        icon="pi pi-trash"
-                        label={`Delete Selected (${selectedRows.length})`}
-                        severity="danger"
-                        onClick={deleteSelectedRows}
-                        style={{backgroundColor: '#dc2626', borderColor: '#dc2626'}}
-                    />
+                    <Button icon="pi pi-trash" label={`Delete Selected (${selectedRows.length})`} severity="danger"
+                            onClick={deleteSelectedRows} style={{backgroundColor: "#dc2626", borderColor: "#dc2626"}}/>
                 )}
             </div>
 
-            <div style={{overflowX: 'auto', width: '100%'}}>
+            <div style={{overflowX: "auto", width: "100%"}}>
                 <DataTable value={filteredRows}
                            emptyMessage={showAllItems ? "No learning items available." : "No items due for repetition at the moment."}
                            editMode="row" dataKey="id" filterDisplay="row" filters={filters}
                            onFilter={e => setFilters(e.filters)} editingRows={editingRows}
                            onRowEditChange={e => setEditingRows(e.data)} onRowEditComplete={onRowEditComplete}
-                           onContextMenu={(e) => {
+                           onContextMenu={e => {
                                setSelectedRow(e.data);
                                cm.current.show(e.originalEvent);
                            }} contextMenuSelection={selectedRow}
                            onContextMenuSelectionChange={e => setSelectedRow(e.value)}
                            selectionMode="multiple" selection={selectedRows}
-                           onSelectionChange={(e) => setSelectedRows(e.value)}
+                           onSelectionChange={e => setSelectedRows(e.value)}
                            metaKeySelection={metaKey}
-                           responsiveLayout="scroll"                           breakpoint="768px" style={{minWidth: '600px'}}>
+                           responsiveLayout="scroll" breakpoint="768px" style={{minWidth: "600px"}}>
                     <Column header="#" body={orderBody} style={{width: "3rem", textAlign: "center"}}/>
                     <Column field="statusLabel" header="Status" body={statusBodyTemplate} sortable
                             sortFunction={statusSortFunction} filter
-                            filterElement={createFilterTemplate(STATUS_LABELS, 'color')} showFilterMenu={false}
+                            filterElement={createFilterTemplate(STATUS_LABELS, "color")} showFilterMenu={false}
                             showFilterMatchModes={false} showClearButton={false} showApplyButton={false}
                             style={{minWidth: "10rem"}}/>
                     <Column field="number_of_repeats" header="Repeats" body={quantityBodyTemplate} sortable filter
-                            filterField="repeatsLabel" filterElement={createFilterTemplate(REPEATS_LABELS, 'color')}
+                            filterField="repeatsLabel" filterElement={createFilterTemplate(REPEATS_LABELS, "color")}
                             showFilterMenu={false} showFilterMatchModes={false} showClearButton={false}
                             showApplyButton={false} style={{minWidth: "6rem", textAlign: "center"}}/>
-                    <Column
-                        field="label"
-                        header="Label"
-                        body={labelBody}
-                        editor={labelEditor}
-                        filter
-                        filterElement={labelFilterTemplate}
-                        showFilterMenu={false}
-                        showFilterMatchModes={false}
-                        showClearButton={false}
-                        showApplyButton={false}
-                        sortable
-                        style={{minWidth: "8rem"}}
-                    />
+                    <Column field="label" header="Label" body={labelBody} editor={labelEditor} filter
+                            filterElement={labelFilterTemplate} showFilterMenu={false} showFilterMatchModes={false}
+                            showClearButton={false} showApplyButton={false} sortable style={{minWidth: "8rem"}}/>
                     <Column field="content" header="Content" body={contentBodyTemplate} editor={textEditor} filter
-                            filterElement={(options) => textFilterTemplate({
-                                ...options,
-                                filterPlaceholder: "Search content"
-                            })} showFilterMenu={false} showFilterMatchModes={false} showClearButton={false}
+                            filterElement={options => textFilterTemplate({...options, filterPlaceholder: "Search content"})}
+                            showFilterMenu={false} showFilterMatchModes={false} showClearButton={false}
                             showApplyButton={false} style={{minWidth: "15rem"}}/>
-                    <Column field="explanation" header="Explanation" body={explanationBodyTemplate} editor={textEditor}
-                            filter filterElement={(options) => textFilterTemplate({
-                        ...options,
-                        filterPlaceholder: "Search explanation"
-                    })} showFilterMenu={false} showFilterMatchModes={false} showClearButton={false}
+                    <Column field="explanation" header="Explanation" body={explanationBodyTemplate} editor={textEditor} filter
+                            filterElement={options => textFilterTemplate({...options, filterPlaceholder: "Search explanation"})}
+                            showFilterMenu={false} showFilterMatchModes={false} showClearButton={false}
                             showApplyButton={false} style={{minWidth: "18rem"}}/>
-                    <Column rowEditor headerStyle={{width: "7rem", minWidth: "6rem"}}
-                            bodyStyle={{textAlign: "center"}}/>
-                    <Column body={(rowData) => <Button icon="pi pi-trash" className="p-button-text p-button-danger"
-                                                       onClick={(e) => {
-                                                           e.stopPropagation();
-                                                           deleteRow(rowData);
-                                                       }} tooltip="Delete"
-                                                       tooltipOptions={{position: 'top'}}/>}/>
+                    <Column rowEditor headerStyle={{width: "7rem", minWidth: "6rem"}} bodyStyle={{textAlign: "center"}}/>
+                    <Column body={rowData => (
+                        <Button icon="pi pi-trash" className="p-button-text p-button-danger"
+                                onClick={e => {
+                                    e.stopPropagation();
+                                    deleteRow(rowData);
+                                }} tooltip="Delete" tooltipOptions={{position: "top"}}/>
+                    )}/>
                 </DataTable>
             </div>
 
             {gameModalVisible && gameModalData && (isDesktop ? (
                 <TypingTrainerModal wordData={{...gameModalData, content: gameModalData.combinedText}}
-                                    visible={gameModalVisible} onClose={() => {
-                    setGameModalVisible(false);
-                    setGameModalData(null);
-                }}/>) : (
-                <SpellGameModal spellText={gameModalData.combinedText} visible={gameModalVisible} onClose={() => {
-                    setGameModalVisible(false);
-                    setGameModalData(null);
-                }}/>))}
+                                    visible={gameModalVisible} onClose={closeGame}/>
+            ) : (
+                <SpellGameModal spellText={gameModalData.combinedText} visible={gameModalVisible} onClose={closeGame}/>
+            ))}
 
-            <Dialog header="Image Viewer" visible={imageModalVisible} style={{width: '80vw', maxWidth: '800px'}}
+            <Dialog header="Image Viewer" visible={imageModalVisible} style={{width: "80vw", maxWidth: "800px"}}
                     onHide={() => setImageModalVisible(false)} modal>
                 {imageError ? (
-                    <div style={{padding: '2rem', textAlign: 'center', color: 'red', fontSize: '1.1rem'}}>Image cannot
-                        be reached</div>) : (<img src={currentImage} alt="Full size" style={{
-                    width: '100%',
-                    height: 'auto',
-                    maxHeight: '70vh',
-                    objectFit: 'contain'
-                }} onError={() => setImageError(true)}/>)}
+                    <div style={{padding: "2rem", textAlign: "center", color: "red", fontSize: "1.1rem"}}>Image cannot be reached</div>
+                ) : (
+                    <img src={currentImage} alt="Full size"
+                         style={{width: "100%", height: "auto", maxHeight: "70vh", objectFit: "contain"}}
+                         onError={() => setImageError(true)}/>
+                )}
             </Dialog>
 
-            <Dialog header="Rule Viewer" visible={tableModalVisible} style={{width: '90vw', maxWidth: '1200px'}}
+            <Dialog header="Rule Viewer" visible={tableModalVisible} style={{width: "90vw", maxWidth: "1200px"}}
                     onHide={() => setTableModalVisible(false)} modal
-                    contentStyle={{padding: '1rem', overflowX: 'auto', maxHeight: '70vh'}}>
+                    contentStyle={{padding: "1rem", overflowX: "auto", maxHeight: "70vh"}}>
                 <div dangerouslySetInnerHTML={{__html: currentTableHtml}}/>
             </Dialog>
         </div>
     );
 }
-
