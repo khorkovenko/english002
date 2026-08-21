@@ -251,11 +251,11 @@ export default function LearningTable() {
                 number_of_repeats: 0,
             }]).select().single();
             if (error) throw error;
-            setRows([{
+            setRows(prevRows => [{
                 ...data,
                 statusLabel: getStatusLabel(data.last_repeat_date),
                 repeatsLabel: getRepeatsLabel(data.number_of_repeats)
-            }, ...rows]);
+            }, ...prevRows]);
             setContent("");
             setExplanation("");
             showToast("success", "Success", "Content item added", 2000);
@@ -299,7 +299,7 @@ export default function LearningTable() {
                 query: newButtonQuery.trim(),
             }]).select().single();
             if (error) throw error;
-            setQuickButtons([...quickButtons, data]);
+            setQuickButtons(prev => [...prev, data]);
             setNewButtonName("");
             setNewButtonQuery("");
             showToast("success", "Success", "Quick button added", 2000);
@@ -313,7 +313,7 @@ export default function LearningTable() {
         try {
             const {error} = await supabase.from('quick_buttons').delete().eq('id', id);
             if (error) throw error;
-            setQuickButtons(quickButtons.filter(b => b.id !== id));
+            setQuickButtons(prev => prev.filter(b => b.id !== id));
             showToast("info", "Deleted", "Quick button removed", 1500);
         } catch (error) {
             console.error('Error deleting quick button:', error);
@@ -347,7 +347,7 @@ export default function LearningTable() {
         try {
             const {error} = await supabase.from('learning_items').delete().eq('id', rowData.id);
             if (error) throw error;
-            setRows(rows.filter(r => r.id !== rowData.id));
+            setRows(prevRows => prevRows.filter(r => r.id !== rowData.id));
             showToast("info", "Deleted", "Item removed", 1500);
         } catch (error) {
             console.error('Error deleting row:', error);
@@ -413,12 +413,7 @@ export default function LearningTable() {
             }).eq('id', newData.id);
 
             if (error) throw error;
-            const actualIndex = rows.findIndex(r => r.id === newData.id);
-            if (actualIndex !== -1) {
-                const updatedRows = [...rows];
-                updatedRows[actualIndex] = newData;
-                setRows(updatedRows);
-            }
+            setRows(prevRows => prevRows.map(r => r.id === newData.id ? newData : r));
             showToast("success", "Updated", "Item updated successfully", 1500);
         } catch (error) {
             console.error('Error updating row:', error);
@@ -1086,4 +1081,4 @@ export default function LearningTable() {
         </div>
     );
 }
-//
+
