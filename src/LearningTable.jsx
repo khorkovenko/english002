@@ -93,6 +93,8 @@ export default function LearningTable() {
     const [newButtonName, setNewButtonName] = useState("");
     const [newButtonQuery, setNewButtonQuery] = useState("");
     const [showAllItems, setShowAllItems] = useState(true);
+    const [selectedRows, setSelectedRows] = useState([]);
+    const [metaKey] = useState(true);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -343,15 +345,44 @@ export default function LearningTable() {
     };
 
     const deleteRow = async (rowData) => {
-        if (!window.confirm(`Delete "${rowData.content}"?`)) return;
+        const isBulk = selectedRows.length > 0 && selectedRows.some(r => r.id === rowData.id);
+        const targets = isBulk ? selectedRows : [rowData];
+
+        const message = isBulk
+            ? `Delete ${targets.length} selected items?\n\n${targets.map(r => `• ${r.content}`).join('\n')}`
+            : `Delete "${rowData.content}"?`;
+
+        if (!window.confirm(message)) return;
+
         try {
-            const {error} = await supabase.from('learning_items').delete().eq('id', rowData.id);
+            const ids = targets.map(r => r.id);
+            const {error} = await supabase.from('learning_items').delete().in('id', ids);
             if (error) throw error;
-            setRows(prevRows => prevRows.filter(r => r.id !== rowData.id));
-            showToast("info", "Deleted", "Item removed", 1500);
+            setRows(prevRows => prevRows.filter(r => !ids.includes(r.id)));
+            setSelectedRows([]);
+            showToast("info", "Deleted", isBulk ? `${ids.length} items removed` : "Item removed", 1500);
         } catch (error) {
-            console.error('Error deleting row:', error);
-            showToast("error", "Error", "Failed to delete item");
+            console.error('Error deleting row(s):', error);
+            showToast("error", "Error", "Failed to delete item(s)");
+        }
+    };
+
+    const deleteSelectedRows = async () => {
+        if (!selectedRows || selectedRows.length === 0) return;
+
+        const message = `Delete ${selectedRows.length} selected items?\n\n${selectedRows.map(r => `• ${r.content}`).join('\n')}`;
+        if (!window.confirm(message)) return;
+
+        try {
+            const ids = selectedRows.map(r => r.id);
+            const {error} = await supabase.from('learning_items').delete().in('id', ids);
+            if (error) throw error;
+            setRows(prevRows => prevRows.filter(r => !ids.includes(r.id)));
+            setSelectedRows([]);
+            showToast("info", "Deleted", `${ids.length} items removed`, 1500);
+        } catch (error) {
+            console.error('Error deleting selected rows:', error);
+            showToast("error", "Error", "Failed to delete items");
         }
     };
 
@@ -987,10 +1018,19 @@ export default function LearningTable() {
                 </div>
             </div>
 
-            <div style={{marginBottom: '1rem'}}>
+            <div style={{marginBottom: '1rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap'}}>
                 <ToggleButton onLabel="All Items" offLabel="Spaced Repetition" onIcon="pi pi-list"
                               offIcon="pi pi-calendar" checked={showAllItems} onChange={(e) => setShowAllItems(e.value)}
                               style={{width: '200px'}}/>
+                {selectedRows.length > 1 && (
+                    <Button
+                        icon="pi pi-trash"
+                        label={`Delete Selected (${selectedRows.length})`}
+                        severity="danger"
+                        onClick={deleteSelectedRows}
+                        style={{backgroundColor: '#dc2626', borderColor: '#dc2626'}}
+                    />
+                )}
             </div>
 
             <div style={{overflowX: 'auto', width: '100%'}}>
@@ -1003,8 +1043,11 @@ export default function LearningTable() {
                                setSelectedRow(e.data);
                                cm.current.show(e.originalEvent);
                            }} contextMenuSelection={selectedRow}
-                           onContextMenuSelectionChange={e => setSelectedRow(e.value)} responsiveLayout="scroll"
-                           breakpoint="768px" style={{minWidth: '600px'}}>
+                           onContextMenuSelectionChange={e => setSelectedRow(e.value)}
+                           selectionMode="multiple" selection={selectedRows}
+                           onSelectionChange={(e) => setSelectedRows(e.value)}
+                           metaKeySelection={metaKey}
+                           responsiveLayout="scroll"                           breakpoint="768px" style={{minWidth: '600px'}}>
                     <Column header="#" body={orderBody} style={{width: "3rem", textAlign: "center"}}/>
                     <Column field="statusLabel" header="Status" body={statusBodyTemplate} sortable
                             sortFunction={statusSortFunction} filter
@@ -1044,9 +1087,11 @@ export default function LearningTable() {
                     <Column rowEditor headerStyle={{width: "7rem", minWidth: "6rem"}}
                             bodyStyle={{textAlign: "center"}}/>
                     <Column body={(rowData) => <Button icon="pi pi-trash" className="p-button-text p-button-danger"
-                                                       onClick={() => deleteRow(rowData)} tooltip="Delete"
-                                                       tooltipOptions={{position: 'top'}}/>}
-                            headerStyle={{width: "5rem", minWidth: "4rem"}} bodyStyle={{textAlign: "center"}}/>
+                                                       onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           deleteRow(rowData);
+                                                       }} tooltip="Delete"
+                                                       tooltipOptions={{position: 'top'}}/>}/>
                 </DataTable>
             </div>
 
