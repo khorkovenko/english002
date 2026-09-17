@@ -691,8 +691,11 @@ export default function LearningTable() {
                 <ToggleButton onLabel="All Items" offLabel="Spaced Repetition" onIcon="pi pi-list" offIcon="pi pi-calendar"
                               checked={showAllItems} onChange={e => setShowAllItems(e.value)} style={{width: "200px"}}/>
                 {selectedRows.length > 1 && (
-                    <Button icon="pi pi-trash" label={`Delete Selected (${selectedRows.length})`} severity="danger"
-                            onClick={deleteSelectedRows} style={{backgroundColor: "#dc2626", borderColor: "#dc2626"}}/>
+                    <>
+                        <Button icon="pi pi-trash" label={`Delete Selected (${selectedRows.length})`} severity="danger"
+                                onClick={deleteSelectedRows} style={{backgroundColor: "#dc2626", borderColor: "#dc2626"}}/>
+                        <Button icon="pi pi-times" label="Clear Selection" outlined onClick={() => setSelectedRows([])}/>
+                    </>
                 )}
             </div>
 
@@ -705,8 +708,7 @@ export default function LearningTable() {
                            onContextMenu={e => {
                                setSelectedRow(e.data);
                                cm.current.show(e.originalEvent);
-                           }} contextMenuSelection={selectedRow}
-                           onContextMenuSelectionChange={e => setSelectedRow(e.value)}
+                           }}
                            selectionMode="multiple" selection={selectedRows}
                            onSelectionChange={e => setSelectedRows(e.value)}
                            metaKeySelection={metaKey}
