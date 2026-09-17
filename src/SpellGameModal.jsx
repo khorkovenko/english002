@@ -1,9 +1,19 @@
 import React, { useRef, useState, useEffect } from "react";
 import { Dialog } from "primereact/dialog";
 import { Button } from "primereact/button";
+import { Dropdown } from "primereact/dropdown";
 import "primereact/resources/themes/saga-blue/theme.css";
 import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
+
+const FONTS = [
+    { label: "Patrick Hand (print)", value: "Patrick Hand" },
+    { label: "Schoolbell (print)", value: "Schoolbell" },
+    { label: "Cedarville Cursive (cursive)", value: "Cedarville Cursive" },
+];
+const FONT_SIZES = [42, 52, 63, 74, 84].map(v => ({ label: `${v}px`, value: v }));
+const PAD = 20;
+const TOP_PAD = 30;
 
 export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const canvasRef = useRef(null);
@@ -13,12 +23,16 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const [useFinger, setUseFinger] = useState(false);
     const [canvasWidth, setCanvasWidth] = useState(650);
     const [canvasHeight, setCanvasHeight] = useState(400);
+    const [fontFamily, setFontFamily] = useState(FONTS[0].value);
+    const [fontSize, setFontSize] = useState(63);
+
+    const lineHeight = Math.round(fontSize * 1.2);
+    const underlineOffset = Math.round(fontSize * 1.05);
+    const topOffset = Math.round(fontSize * 0.31);
+    const fontSpec = `${fontSize}px '${fontFamily}', cursive`;
 
     useEffect(() => {
-        const updateCanvasSize = () => {
-            const width = Math.min(window.innerWidth - 40, 650);
-            setCanvasWidth(width);
-        };
+        const updateCanvasSize = () => setCanvasWidth(Math.min(window.innerWidth - 40, 650));
         updateCanvasSize();
         window.addEventListener("resize", updateCanvasSize);
         return () => window.removeEventListener("resize", updateCanvasSize);
@@ -26,168 +40,85 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
 
     useEffect(() => {
         if (!visible) return;
-        const prevOverflow = document.body.style.overflow;
-        const prevPosition = document.body.style.position;
+        const { overflow, position } = document.body.style;
         document.body.style.overflow = "hidden";
         document.body.style.position = "fixed";
         return () => {
-            document.body.style.overflow = prevOverflow;
-            document.body.style.position = prevPosition;
+            document.body.style.overflow = overflow;
+            document.body.style.position = position;
         };
     }, [visible]);
 
-    useEffect(() => {
-        if (!spellText) return;
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = canvasWidth;
-        const ctx = tempCanvas.getContext("2d");
-        ctx.font = "bold 42px Arial";
-
-        const padding = 20;
-        const startX = padding + 5;
-        let x = startX;
-        let lines = 1;
-        const lineHeight = 50;
-        const maxWidth = canvasWidth - padding * 2;
-
-        spellText.split(" ").forEach(word => {
+    const layout = (ctx, width, draw) => {
+        const startX = PAD + 5;
+        const maxX = width - PAD;
+        let x = startX, y = PAD + TOP_PAD - topOffset, lines = 1;
+        const newLine = () => {
+            x = startX;
+            y += lineHeight;
+            lines++;
+        };
+        const words = spellText.split(" ");
+        words.forEach((word, wi) => {
             const wordWidth = ctx.measureText(word).width;
             const spaceWidth = ctx.measureText(" ").width;
-
-            if (x > startX && x + wordWidth > canvasWidth - padding) {
-                lines++;
-                x = startX;
+            if (x > startX && x + wordWidth > maxX) newLine();
+            const perChar = wordWidth > width - PAD * 2;
+            (perChar ? [...word] : [word]).forEach(g => {
+                const w = ctx.measureText(g).width;
+                if (perChar && x + w > maxX) newLine();
+                draw?.(g, x, y, w);
+                x += w;
+            });
+            if (wi < words.length - 1) {
+                draw?.(null, x, y, spaceWidth);
+                x += spaceWidth;
             }
-
-            if (wordWidth > maxWidth) {
-                [...word].forEach(char => {
-                    const charWidth = ctx.measureText(char).width;
-                    if (x + charWidth > canvasWidth - padding) {
-                        lines++;
-                        x = startX;
-                    }
-                    x += charWidth;
-                });
-            } else {
-                x += wordWidth;
-            }
-            x += spaceWidth;
         });
+        return lines;
+    };
 
-        setCanvasHeight(Math.max(400, lines * lineHeight + padding * 2 + 60));
-    }, [spellText, canvasWidth]);
+    useEffect(() => {
+        if (!spellText) return;
+        const ctx = document.createElement("canvas").getContext("2d");
+        ctx.font = fontSpec;
+        setCanvasHeight(Math.max(400, layout(ctx, canvasWidth) * lineHeight + PAD * 2 + TOP_PAD + 60));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [spellText, canvasWidth, fontSpec, lineHeight, topOffset]);
 
     const renderTextWithUnderlines = (ctx, canvas) => {
-        ctx.font = "42px 'Patrick Hand', cursive";
+        ctx.font = fontSpec;
         ctx.textBaseline = "top";
         ctx.strokeStyle = "#4285F4";
         ctx.lineWidth = 2;
-
-        const padding = 20;
-        const startX = padding + 5;
-        let x = startX;
-        let y = padding - 13;
-        const lineHeight = 50;
-        const underlineOffset = 44;
-        const maxWidth = canvas.width - padding * 2;
-
-        spellText.split(" ").forEach((word, wi, arr) => {
-            const wordWidth = ctx.measureText(word).width;
-            const spaceWidth = ctx.measureText(" ").width;
-
-            if (x > startX && x + wordWidth > canvas.width - padding) {
-                x = startX;
-                y += lineHeight;
-            }
-
-            if (wordWidth > maxWidth) {
-                [...word].forEach(char => {
-                    const charWidth = ctx.measureText(char).width;
-                    if (x + charWidth > canvas.width - padding) {
-                        x = startX;
-                        y += lineHeight;
-                    }
-                    ctx.fillText(char, x, y);
-                    ctx.beginPath();
-                    ctx.moveTo(x, y + underlineOffset);
-                    ctx.lineTo(x + charWidth, y + underlineOffset);
-                    ctx.stroke();
-                    x += charWidth;
-                });
-            } else {
-                ctx.fillText(word, x, y);
-                ctx.beginPath();
-                ctx.moveTo(x, y + underlineOffset);
-                ctx.lineTo(x + wordWidth, y + underlineOffset);
-                ctx.stroke();
-                x += wordWidth;
-            }
-
-            if (wi < arr.length - 1) {
-                ctx.beginPath();
-                ctx.moveTo(x, y + underlineOffset);
-                ctx.lineTo(x + spaceWidth, y + underlineOffset);
-                ctx.stroke();
-                x += spaceWidth;
-            }
+        layout(ctx, canvas.width, (g, x, y, w) => {
+            if (g) ctx.fillText(g, x, y);
+            ctx.beginPath();
+            ctx.moveTo(x, y + underlineOffset);
+            ctx.lineTo(x + w, y + underlineOffset);
+            ctx.stroke();
         });
     };
 
     const renderTextOnly = (ctx, canvas) => {
-        ctx.font = "bold 42px Arial";
+        ctx.font = `bold ${fontSize}px Arial`;
         ctx.textBaseline = "top";
-
-        const padding = 20;
-        const startX = padding + 5;
-        let x = startX;
-        let y = padding - 13;
-        const lineHeight = 50;
-        const maxWidth = canvas.width - padding * 2;
-
-        spellText.split(" ").forEach(word => {
-            const wordWidth = ctx.measureText(word).width;
-            const spaceWidth = ctx.measureText(" ").width;
-
-            if (x > startX && x + wordWidth > canvas.width - padding) {
-                x = startX;
-                y += lineHeight;
-            }
-
-            if (wordWidth > maxWidth) {
-                [...word].forEach(char => {
-                    const charWidth = ctx.measureText(char).width;
-                    if (x + charWidth > canvas.width - padding) {
-                        x = startX;
-                        y += lineHeight;
-                    }
-                    ctx.fillText(char, x, y);
-                    x += charWidth;
-                });
-            } else {
-                ctx.fillText(word, x, y);
-                x += wordWidth;
-            }
-            x += spaceWidth;
-        });
+        layout(ctx, canvas.width, (g, x, y) => g && ctx.fillText(g, x, y));
     };
 
     const drawCanvas = () => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext("2d");
-
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#E3F2FD";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
         ctx.fillStyle = "rgba(100,100,100,0.3)";
         renderTextWithUnderlines(ctx, canvas);
-
         ctx.strokeStyle = "#000000";
         ctx.lineWidth = 4;
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
-
         [...paths, currentPath].forEach(path => {
             if (!path.length) return;
             ctx.beginPath();
@@ -198,67 +129,24 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
 
     useEffect(() => {
         drawCanvas();
-    }, [paths, currentPath, spellText, canvasWidth, canvasHeight]);
+    }, [paths, currentPath, spellText, canvasWidth, canvasHeight, fontSpec]);
+
+    useEffect(() => {
+        document.fonts?.load(fontSpec).then(drawCanvas);
+    }, [fontSpec]);
 
     useEffect(() => {
         if (!visible) return;
-        requestAnimationFrame(() => {
-            drawCanvas();
-        });
+        requestAnimationFrame(drawCanvas);
     }, [visible, canvasWidth, canvasHeight]);
 
     const getOffset = (el, clientX, clientY) => {
         const rect = el.getBoundingClientRect();
-        const scaleX = el.width / rect.width;
-        const scaleY = el.height / rect.height;
         return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
+            x: (clientX - rect.left) * (el.width / rect.width),
+            y: (clientY - rect.top) * (el.height / rect.height)
         };
     };
-
-    // useEffect(() => {
-    //     const canvas = canvasRef.current;
-    //     if (!canvas) return;
-    //
-    //     const down = e => {
-    //         if (!useFinger && e.pointerType !== "pen") return;
-    //         e.preventDefault();
-    //         canvas.setPointerCapture(e.pointerId);
-    //         setDrawing(true);
-    //         const pos = getOffset(canvas, e.clientX, e.clientY);
-    //         setCurrentPath([{ x: pos.x, y: pos.y }]);
-    //     };
-    //
-    //     const move = e => {
-    //         if (!drawing) return;
-    //         if (!useFinger && e.pointerType !== "pen") return;
-    //         e.preventDefault();
-    //         const pos = getOffset(canvas, e.clientX, e.clientY);
-    //         setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
-    //     };
-    //
-    //     const up = e => {
-    //         if (!drawing) return;
-    //         e.preventDefault();
-    //         try { canvas.releasePointerCapture(e.pointerId); } catch {}
-    //         setDrawing(false);
-    //         setPaths(p => [...p, currentPath]);
-    //         setCurrentPath([]);
-    //     };
-    //
-    //     canvas.addEventListener("pointerdown", down, { passive: false });
-    //     canvas.addEventListener("pointermove", move, { passive: false });
-    //     canvas.addEventListener("pointerup", up, { passive: false });
-    //     canvas.addEventListener("pointercancel", up, { passive: false });
-    //
-    //     return () => {
-    //         canvas.removeEventListener("pointerdown", down);
-    //         canvas.removeEventListener("pointermove", move);
-    //         canvas.removeEventListener("pointerup", up);
-    //         canvas.removeEventListener("pointercancel", up);
-    //     };
-    // }, [drawing, useFinger, currentPath]);
 
     const handleReset = () => {
         setPaths([]);
@@ -271,24 +159,15 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         off.width = canvas.width;
         off.height = canvas.height;
         const ctx = off.getContext("2d");
-
         ctx.fillStyle = "black";
         renderTextOnly(ctx, off);
         const data = ctx.getImageData(0, 0, off.width, off.height).data;
-
-        let hit = 0;
-        let total = 0;
-
-        paths.forEach(path =>
-            path.forEach(p => {
-                total++;
-                const i = ((p.y | 0) * off.width + (p.x | 0)) * 4;
-                if (data[i + 3] > 0) hit++;
-            })
-        );
-
+        let hit = 0, total = 0;
+        paths.forEach(path => path.forEach(p => {
+            total++;
+            if (data[((p.y | 0) * off.width + (p.x | 0)) * 4 + 3] > 0) hit++;
+        }));
         const accuracy = total ? Math.round((hit / total) * 100) : 0;
-
         if (accuracy >= 80) {
             alert(`Great job! Your accuracy: ${accuracy}%`);
             onClose();
@@ -306,23 +185,13 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             closable={false}
             focusOnShow={false}
             style={{ width: "95vw", maxWidth: "700px" }}
-            contentStyle={{
-                padding: "1rem",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                maxHeight: "85vh",
-                overflowY: "auto"
-            }}
+            contentStyle={{ padding: "1rem", display: "flex", flexDirection: "column", alignItems: "center", maxHeight: "85vh", overflowY: "auto" }}
             onHide={onClose}
-            onShow={() => {
-                requestAnimationFrame(() => {
-                    drawCanvas();
-                    canvasRef.current?.focus();
-                });
-            }}
+            onShow={() => requestAnimationFrame(() => {
+                drawCanvas();
+                canvasRef.current?.focus();
+            })}
         >
-
             <canvas
                 ref={canvasRef}
                 tabIndex={0}
@@ -332,16 +201,14 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                 onPointerDown={e => {
                     if (!useFinger && e.pointerType !== "pen") return;
                     e.preventDefault();
-                    const pos = getOffset(canvasRef.current, e.clientX, e.clientY);
                     setDrawing(true);
-                    setCurrentPath([{ x: pos.x, y: pos.y }]);
+                    setCurrentPath([getOffset(canvasRef.current, e.clientX, e.clientY)]);
                 }}
                 onPointerMove={e => {
-                    if (!drawing) return;
-                    if (!useFinger && e.pointerType !== "pen") return;
+                    if (!drawing || (!useFinger && e.pointerType !== "pen")) return;
                     e.preventDefault();
                     const pos = getOffset(canvasRef.current, e.clientX, e.clientY);
-                    setCurrentPath(p => [...p, { x: pos.x, y: pos.y }]);
+                    setCurrentPath(p => [...p, pos]);
                 }}
                 onPointerUp={e => {
                     if (!drawing) return;
@@ -355,46 +222,18 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                     setCurrentPath([]);
                 }}
                 style={{
-                    border: "2px solid #1976D2",
-                    borderRadius: "8px",
-                    cursor: "crosshair",
-                    marginBottom: "1rem",
-                    touchAction: "none",
-                    userSelect: "none",
-                    WebkitUserSelect: "none",
-                    WebkitTouchCallout: "none",
-                    WebkitTapHighlightColor: "transparent",
-                    maxWidth: "100%",
-                    display: "block"
+                    border: "2px solid #1976D2", borderRadius: "8px", cursor: "crosshair", marginBottom: "1rem",
+                    touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
+                    WebkitTapHighlightColor: "transparent", maxWidth: "100%", display: "block"
                 }}
             />
-
-
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", justifyContent: "center" }}>
-                <Button
-                    label={useFinger ? "Fingers allowed" : "Only stylus"}
-                    icon="pi pi-pencil"
-                    className="p-button-warning"
-                    onClick={() => setUseFinger(v => !v)}
-                />
-                <Button
-                    label="Reset"
-                    icon="pi pi-replay"
-                    className="p-button-danger"
-                    onClick={handleReset}
-                />
-                <Button
-                    label="Finish"
-                    icon="pi pi-check"
-                    className="p-button-success"
-                    onClick={calculateAccuracy}
-                />
-                <Button
-                    label="Close"
-                    icon="pi pi-times"
-                    className="p-button-secondary"
-                    onClick={onClose}
-                />
+                <Dropdown value={fontFamily} options={FONTS} onChange={e => setFontFamily(e.value)} style={{ minWidth: "12rem" }}/>
+                <Dropdown value={fontSize} options={FONT_SIZES} onChange={e => setFontSize(e.value)} style={{ minWidth: "6rem" }}/>
+                <Button label={useFinger ? "Fingers allowed" : "Only stylus"} icon="pi pi-pencil" className="p-button-warning" onClick={() => setUseFinger(v => !v)}/>
+                <Button label="Reset" icon="pi pi-replay" className="p-button-danger" onClick={handleReset}/>
+                <Button label="Finish" icon="pi pi-check" className="p-button-success" onClick={calculateAccuracy}/>
+                <Button label="Close" icon="pi pi-times" className="p-button-secondary" onClick={onClose}/>
             </div>
         </Dialog>
     );

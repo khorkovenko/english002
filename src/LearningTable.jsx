@@ -40,6 +40,8 @@ const REPEATS_LABELS = [
 const REPETITION_SCHEDULE = [0, 1, 3, 7, 16, 35];
 const DAY = 86400000;
 
+const checkDesktop = () => window.innerWidth >= 1280 && window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+
 const labelColor = (v, fb = "#000") => LABELS.find(l => l.value === v)?.color || fb;
 const getStatusLabel = d => STATUS_LABELS.find(s => new Date() - new Date(d) <= s.maxDays * DAY)?.name || "Lost";
 const getRepeatsLabel = n => REPEATS_LABELS.find(r => n >= r.min && n <= r.max)?.name || "Mastered";
@@ -72,6 +74,20 @@ const buildChatGPTQuery = ({content, explanation, queryTemplate}) => {
     return special ? `${content} | ${resolved}` : `${content} - ${explanation} | ${resolved}`;
 };
 
+const menuItemTemplate = (item, options) => (
+    <a className={options.className} onClick={options.onClick}
+       onTouchEnd={e => {
+           e.preventDefault();
+           options.onClick(e);
+       }} style={{userSelect: "none", WebkitTapHighlightColor: "transparent"}}>
+        {item.icon && <span className={options.iconClassName}/>}
+        <span className={options.labelClassName}>{item.label}</span>
+        {item.items && <span className={options.submenuIconClassName}/>}
+    </a>
+);
+
+const withTouchTemplate = items => items.map(i => ({...i, template: menuItemTemplate, items: i.items ? withTouchTemplate(i.items) : undefined}));
+
 const ClearIcon = ({onClick, right = "0.5rem", color = "#777", size = "14px", char = "✕", weight}) => (
     <button onClick={onClick} style={{position: "absolute", right, top: "50%", transform: "translateY(-50%)", color, background: "transparent", border: "none", cursor: "pointer", fontSize: size, fontWeight: weight}}>{char}</button>
 );
@@ -102,7 +118,7 @@ export default function LearningTable() {
     const [customActionName, setCustomActionName] = useState("");
     const [gameModalVisible, setGameModalVisible] = useState(false);
     const [gameModalData, setGameModalData] = useState(null);
-    const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 768);
+    const [isDesktop, setIsDesktop] = useState(checkDesktop());
     const [imageModalVisible, setImageModalVisible] = useState(false);
     const [currentImage, setCurrentImage] = useState(null);
     const [imageError, setImageError] = useState(false);
@@ -153,7 +169,7 @@ export default function LearningTable() {
         fetchData();
         fetchAiQueries();
         fetchQuickButtons();
-        const handleResize = () => setIsDesktop(window.innerWidth >= 768);
+        const handleResize = () => setIsDesktop(checkDesktop());
         window.addEventListener("resize", handleResize);
         return () => window.removeEventListener("resize", handleResize);
     }, []);
@@ -389,7 +405,7 @@ export default function LearningTable() {
         ]
     });
 
-    const menuModel = selectedRow ? (() => {
+    const menuModel = selectedRow ? withTouchTemplate((() => {
         const customActions = customAiActions[selectedRow.label] || [];
         const hasImageOrTable = isImageUrl(selectedRow.explanation) || isHtmlContent(selectedRow.explanation);
         if (selectedRow.label === "word" && !hasImageOrTable) {
@@ -401,7 +417,7 @@ export default function LearningTable() {
         }
         if (customActions.length > 0) return customActions.map(customActionMenuItem);
         return [{label: "No actions available", icon: "pi pi-ban", disabled: true}];
-    })() : [];
+    })()) : [];
 
     const getQuickButtonColor = name => {
         const lower = (name || "").toLowerCase();
@@ -559,6 +575,18 @@ export default function LearningTable() {
                     .p-button { padding: 0.3rem 0.5rem !important; font-size: 0.75rem !important; }
                     .p-inputtext { font-size: 0.75rem !important; padding: 0.3rem !important; }
                 }
+                .p-datatable .p-row-editor-init, .p-datatable .p-row-editor-save, .p-datatable .p-row-editor-cancel {
+                    display: inline-flex !important; align-items: center !important; justify-content: center !important;
+                    width: 2.75rem !important; height: 2.75rem !important; border-radius: 50% !important;
+                    vertical-align: middle !important; margin: 0 !important; -webkit-tap-highlight-color: transparent;
+                }
+                .p-datatable .p-row-editor-save { margin-right: 0.75rem !important; }
+                .p-datatable .p-row-editor-init svg, .p-datatable .p-row-editor-save svg, .p-datatable .p-row-editor-cancel svg,
+                .p-datatable .p-row-editor-init .pi, .p-datatable .p-row-editor-save .pi, .p-datatable .p-row-editor-cancel .pi {
+                    width: 1.25rem !important; height: 1.25rem !important; font-size: 1.25rem !important;
+                }
+                .p-datatable .p-row-editor-save svg, .p-datatable .p-row-editor-save .pi { color: #16a34a; }
+                .p-datatable .p-row-editor-cancel svg, .p-datatable .p-row-editor-cancel .pi { color: #dc2626; }
                 .p-dialog .p-dialog-content table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
                 .p-dialog .p-dialog-content table td, .p-dialog .p-dialog-content table th { padding: 8px; border: 1px solid #ddd; text-align: left; }
                 .p-dialog .p-dialog-content table th { background-color: #f5f5f5; font-weight: bold; }
@@ -704,7 +732,8 @@ export default function LearningTable() {
                             filterElement={options => textFilterTemplate({...options, filterPlaceholder: "Search explanation"})}
                             showFilterMenu={false} showFilterMatchModes={false} showClearButton={false}
                             showApplyButton={false} style={{minWidth: "18rem"}}/>
-                    <Column rowEditor headerStyle={{width: "7rem", minWidth: "6rem"}} bodyStyle={{textAlign: "center"}}/>
+                    <Column rowEditor headerStyle={{width: "8rem", minWidth: "8rem"}}
+                            bodyStyle={{textAlign: "center", whiteSpace: "nowrap", minWidth: "8rem"}}/>
                     <Column body={rowData => (
                         <Button icon="pi pi-trash" className="p-button-text p-button-danger"
                                 onClick={e => {
