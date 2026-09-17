@@ -394,16 +394,17 @@ export default function LearningTable() {
         setGameModalData(null);
     };
 
-    const customActionMenuItem = act => ({
-        label: act.text,
-        icon: "pi pi-arrow-right",
-        items: [
-            {label: "Open", icon: "pi pi-external-link", command: () => openChatGPT(selectedRow.content, selectedRow.explanation, act.key)},
-            {label: "Delete", icon: "pi pi-trash", command: () => {
-                    if (window.confirm(`Delete custom action "${act.text}"?`)) deleteCustomAiAction(act.id);
-                }}
-        ]
-    });
+    const customActionMenuItem = act => {
+        const open = {label: "Open", icon: "pi pi-external-link", command: () => openChatGPT(selectedRow.content, selectedRow.explanation, act.key)};
+        const del = {label: "Delete", icon: "pi pi-trash", command: () => {
+                if (window.confirm(`Delete custom action "${act.text}"?`)) deleteCustomAiAction(act.id);
+            }};
+        if (isDesktop) return [{label: act.text, icon: "pi pi-arrow-right", items: [open, del]}];
+        return [
+            {label: `${act.text} → Open`, icon: "pi pi-external-link", command: open.command},
+            {label: `${act.text} → Delete`, icon: "pi pi-trash", command: del.command}
+        ];
+    };
 
     const menuModel = selectedRow ? withTouchTemplate((() => {
         const customActions = customAiActions[selectedRow.label] || [];
@@ -413,9 +414,9 @@ export default function LearningTable() {
                 label: isDesktop ? "Practice (Typing Trainer)" : "Practice (Spell Game)",
                 icon: "pi pi-play",
                 command: () => openGame(selectedRow)
-            }, ...customActions.map(customActionMenuItem)];
+            }, ...customActions.flatMap(customActionMenuItem)];
         }
-        if (customActions.length > 0) return customActions.map(customActionMenuItem);
+        if (customActions.length > 0) return customActions.flatMap(customActionMenuItem);
         return [{label: "No actions available", icon: "pi pi-ban", disabled: true}];
     })()) : [];
 
