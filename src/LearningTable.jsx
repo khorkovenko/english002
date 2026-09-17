@@ -1,4 +1,4 @@
-import React, {useState, useRef, useEffect, useMemo} from "react";
+import React, {useState, useRef, useEffect, useMemo, useCallback} from "react";
 import {DataTable} from "primereact/datatable";
 import {Column} from "primereact/column";
 import {InputText} from "primereact/inputtext";
@@ -39,6 +39,7 @@ const DEFAULT_KEYS = ["explain", "practice", "explainRule", "discuss", "practice
 const REPETITION_SCHEDULE = [0, 1, 3, 7, 16, 35];
 const DAY = 86400000;
 const TAP = {userSelect: "none", WebkitTapHighlightColor: "transparent"};
+const MENU_BTN = {width: "100%", background: "transparent", border: "none", textAlign: "left", font: "inherit", cursor: "pointer", ...TAP};
 const FILTER_PROPS = {filter: true, showFilterMenu: false, showFilterMatchModes: false, showClearButton: false, showApplyButton: false};
 const CARD = {padding: "1rem", backgroundColor: "white", borderRadius: "0.75rem", boxShadow: "0 1px 2px rgba(0,0,0,0.05)", border: "1px solid #e5e7eb"};
 const CARD_TITLE = {fontSize: "1rem", fontWeight: "600", marginBottom: "0.75rem", color: "#1f2937"};
@@ -87,6 +88,7 @@ const decorate = item => ({...item, statusLabel: statusOf(item.last_repeat_date)
 const toOpts = arr => arr.map(s => ({label: s.name, value: s.name, color: s.color}));
 const isImageUrl = t => typeof t === "string" && /^https?:\/\//i.test(t.trim()) && (/\.(jpg|jpeg|png|gif|bmp|webp|svg)(\?[^?\s]*)?$/i.test(t.trim()) || /imgur\.com/i.test(t));
 const isHtmlContent = t => typeof t === "string" && /<[^>]+>/.test(t);
+const isSpecial = t => isImageUrl(t) || isHtmlContent(t);
 const q = async p => {
     const {data, error} = await p;
     if (error) throw error;
@@ -107,28 +109,40 @@ const chatGPTUrl = qs => `https://chat.openai.com/?q=${encodeURIComponent(qs)}`;
 const openChatGPTUrl = qs => window.open(chatGPTUrl(qs), "_blank");
 
 const buildChatGPTQuery = ({content, explanation, queryTemplate}) => {
-    const special = isImageUrl(explanation) || isHtmlContent(explanation);
+    const special = isSpecial(explanation);
     if (!queryTemplate) return special ? `${content}` : `${content} - ${explanation}`;
     const resolved = queryTemplate.replace(/{content}/g, content).replace(/{explanation}/g, explanation || "");
     return special ? `${content} | ${resolved}` : `${content} - ${explanation} | ${resolved}`;
 };
 
-const menuItemTemplate = (item, options) => (
-    <a className={options.className} onClick={options.onClick} style={TAP}
-       onTouchEnd={e => {
-           e.preventDefault();
-           options.onClick(e);
-       }}>
-        {item.icon && <span className={options.iconClassName}/>}
-        <span className={options.labelClassName}>{item.label}</span>
-        {item.items && <span className={options.submenuIconClassName}/>}
-    </a>
-);
+const menuItemTemplate = hide => (item, options) => {
+    const fire = fn => e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (item.disabled) return;
+        hide();
+        fn?.({originalEvent: e, item});
+    };
+    const main = fire(item.command), del = fire(item.onDelete);
+    return (
+        <div style={{display: "flex", alignItems: "stretch"}}>
+            <button type="button" className={options.className} onClick={main} onTouchEnd={main} style={{...MENU_BTN, flex: 1}}>
+                {item.icon && <span className={options.iconClassName}/>}
+                <span className={options.labelClassName}>{item.label}</span>
+            </button>
+            {item.onDelete && (
+                <button type="button" onClick={del} onTouchEnd={del} style={{...MENU_BTN, width: "auto", padding: "0 0.75rem", color: "#dc2626"}}>
+                    <span className="pi pi-trash"/>
+                </button>
+            )}
+        </div>
+    );
+};
 
-const withTouchTemplate = items => items.map(i => ({...i, template: i.template || menuItemTemplate, items: i.items ? withTouchTemplate(i.items) : undefined}));
+const withTouchTemplate = (items, hide) => items.map(i => ({...i, template: menuItemTemplate(hide)}));
 
-const ClearIcon = ({onClick, right = "0.5rem", color = "#777", size = "14px", char = "✕", weight}) => (
-    <button onClick={onClick} style={{position: "absolute", right, top: "50%", transform: "translateY(-50%)", color, background: "transparent", border: "none", cursor: "pointer", fontSize: size, fontWeight: weight}}>{char}</button>
+const ClearIcon = ({onClick, right = "0.5rem", color = "#777", size = "14px", weight, children = "✕"}) => (
+    <button type="button" onClick={onClick} style={{position: "absolute", right, top: "50%", transform: "translateY(-50%)", color, background: "transparent", border: "none", cursor: "pointer", fontSize: size, fontWeight: weight}}>{children}</button>
 );
 
 const ColorChip = ({color, weight, children}) => (
@@ -158,6 +172,7 @@ export default function LearningTable() {
     const [isDesktop, setIsDesktop] = useState(checkDesktop);
     const [image, setImage] = useState(null);
     const [imageError, setImageError] = useState(false);
+    const [broken, setBroken] = useState({});
     const [tableHtml, setTableHtml] = useState(null);
     const [showAll, setShowAll] = useState(true);
 
@@ -165,15 +180,37 @@ export default function LearningTable() {
     const cm = useRef(null);
 
     const set = k => v => setForm(f => ({...f, [k]: v}));
-    const showToast = (severity, summary, detail, life = 3000) => toast.current?.show({severity, summary, detail, life});
-    const run = async (fn, log, msg) => {
-        try {
-            await fn();
-        } catch (error) {
+    const showToast = useCallback((severity, summary, detail, life = 3000) => toast.current?.show({severity, summary, detail, life}), []);
+    const run = useCallback((fn, log, msg) => {
+        fn().catch(error => {
             console.error(log, error);
             if (msg) showToast("error", "Error", msg);
+        });
+    }, [showToast]);
+
+    const fetchData = useCallback(() => run(async () => {
+        setLoading(true);
+        try {
+            setRows((await q(db("learning_items").select("*").order("created_at", {ascending: false})) || []).map(decorate));
+        } finally {
+            setLoading(false);
         }
-    };
+    }, "Error fetching data:", "Failed to load data"), [run]);
+
+    const fetchAiQueries = useCallback(() => run(async () => {
+        const queries = {}, custom = {};
+        (await q(db("ai_action_queries").select("*")) || []).forEach(({id, label, action_key: key, query_text: query}) => {
+            (queries[label] = queries[label] || {})[key] = query;
+            const list = custom[label] = custom[label] || [];
+            if (!DEFAULT_KEYS.includes(key)) list.push({id, key, query, text: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())});
+        });
+        setAiQueries(queries);
+        setCustomAiActions(custom);
+    }, "Error fetching AI queries:"), [run]);
+
+    const fetchQuickButtons = useCallback(() => run(async () => {
+        setQuickButtons(await q(db("quick_buttons").select("*").order("created_at", {ascending: true})) || []);
+    }, "Error fetching quick buttons:"), [run]);
 
     useEffect(() => {
         const word = new URLSearchParams(window.location.search).get("word");
@@ -183,12 +220,7 @@ export default function LearningTable() {
             showToast("success", "Added", `"${word}" saved`, 2000);
             window.history.replaceState({}, document.title, window.location.pathname);
         }, "Error adding word:", "Failed to add word");
-    }, []);
-
-    const filteredRows = useMemo(() => showAll ? rows : rows.filter(r => {
-        const n = r.number_of_repeats ?? 0;
-        return Math.floor((Date.now() - new Date(r.last_repeat_date)) / DAY) >= REPETITION_SCHEDULE[Math.min(n, REPETITION_SCHEDULE.length - 1)];
-    }), [rows, showAll]);
+    }, [run, showToast]);
 
     useEffect(() => {
         fetchData();
@@ -197,27 +229,12 @@ export default function LearningTable() {
         const onResize = () => setIsDesktop(checkDesktop());
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
-    }, []);
+    }, [fetchData, fetchAiQueries, fetchQuickButtons]);
 
-    const fetchData = () => run(async () => {
-        setLoading(true);
-        setRows((await q(db("learning_items").select("*").order("created_at", {ascending: false})) || []).map(decorate));
-    }, "Error fetching data:", "Failed to load data").finally(() => setLoading(false));
-
-    const fetchAiQueries = () => run(async () => {
-        const queries = {}, custom = {};
-        (await q(db("ai_action_queries").select("*")) || []).forEach(({id, label, action_key: key, query_text: query}) => {
-            (queries[label] = queries[label] || {})[key] = query;
-            const list = custom[label] = custom[label] || [];
-            if (!DEFAULT_KEYS.includes(key)) list.push({id, key, query, text: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())});
-        });
-        setAiQueries(queries);
-        setCustomAiActions(custom);
-    }, "Error fetching AI queries:");
-
-    const fetchQuickButtons = () => run(async () => {
-        setQuickButtons(await q(db("quick_buttons").select("*").order("created_at", {ascending: true})) || []);
-    }, "Error fetching quick buttons:");
+    const filteredRows = useMemo(() => showAll ? rows : rows.filter(r => {
+        const n = r.number_of_repeats ?? 0;
+        return Math.floor((Date.now() - new Date(r.last_repeat_date)) / DAY) >= REPETITION_SCHEDULE[Math.min(n, REPETITION_SCHEDULE.length - 1)];
+    }), [rows, showAll]);
 
     const addContentRow = () => {
         const {labelToAdd, content, explanation} = form;
@@ -235,7 +252,7 @@ export default function LearningTable() {
         if (!requestQuery.trim() || !actionName.trim()) return showToast("warn", "Validation", "Please enter action name and query", 2000);
         run(async () => {
             await q(db("ai_action_queries").insert([{label: labelForRequest, action_key: actionName.trim().toLowerCase().replace(/\s+/g, "_"), query_text: requestQuery.trim()}]).select().single());
-            await fetchAiQueries();
+            fetchAiQueries();
             setForm(f => ({...f, actionName: "", requestQuery: ""}));
             showToast("success", "Success", "Custom AI action added", 2000);
         }, "Error adding AI request:", "Failed to add custom AI action");
@@ -260,7 +277,7 @@ export default function LearningTable() {
 
     const deleteCustomAiAction = id => run(async () => {
         await q(db("ai_action_queries").delete().eq("id", id));
-        await fetchAiQueries();
+        fetchAiQueries();
         showToast("info", "Deleted", "Custom action removed", 1500);
     }, "Error deleting custom action:", "Failed to delete action");
 
@@ -300,43 +317,35 @@ export default function LearningTable() {
     }, "Error updating row:", "Failed to update item");
 
     const queryFor = (row, key) => buildChatGPTQuery({content: row.content, explanation: row.explanation, queryTemplate: key ? aiQueries[row.label]?.[key] || null : null});
-    const openGame = row => setGame({...row, combinedText: `${row.content} - ${row.explanation}`});
-    const closeGame = () => setGame(null);
-
-    const customActionMenuItem = act => {
-        const confirmDelete = () => {
-            cm.current?.hide();
-            if (window.confirm(`Delete custom action "${act.text}"?`)) deleteCustomAiAction(act.id);
-        };
-        if (isDesktop) return {
-            label: act.text, icon: "pi pi-arrow-right",
-            items: [
-                {label: "Open", icon: "pi pi-external-link", command: () => openChatGPTUrl(queryFor(selectedRow, act.key))},
-                {label: "Delete", icon: "pi pi-trash", command: confirmDelete}
-            ]
-        };
-        const url = chatGPTUrl(queryFor(selectedRow, act.key));
-        return {
-            label: act.text,
-            template: (item, options) => (
-                <div className={options.className} style={{display: "flex", alignItems: "center", gap: "0.5rem", ...TAP}}>
-                    <button onClick={e => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        confirmDelete();
-                    }} style={{background: "transparent", border: "none", color: "#dc2626", fontSize: "1.25rem", fontWeight: "bold", lineHeight: 1, padding: "0 0.25rem", cursor: "pointer"}}>×</button>
-                    <a href={url} target="_blank" rel="noopener noreferrer" onClick={() => cm.current?.hide()} style={{flex: 1, color: "inherit", textDecoration: "none"}}>{item.label}</a>
-                </div>
-            )
-        };
+    const scrollY = useRef(0);
+    const restoreScroll = () => requestAnimationFrame(() => window.scrollTo(0, scrollY.current));
+    const openGame = row => {
+        scrollY.current = window.scrollY;
+        setGame({...row, combinedText: `${row.content} - ${row.explanation}`});
+        restoreScroll();
+    };
+    const closeGame = () => {
+        setGame(null);
+        restoreScroll();
     };
 
-    const menuModel = selectedRow ? withTouchTemplate((() => {
-        const custom = (customAiActions[selectedRow.label] || []).map(customActionMenuItem);
-        const special = isImageUrl(selectedRow.explanation) || isHtmlContent(selectedRow.explanation);
-        if (selectedRow.label === "word" && !special) return [{label: isDesktop ? "Practice (Typing Trainer)" : "Practice (Spell Game)", icon: "pi pi-play", command: () => openGame(selectedRow)}, ...custom];
-        return custom.length ? custom : [{label: "No actions available", icon: "pi pi-ban", disabled: true}];
-    })()) : [];
+    const confirmDeleteAction = act => {
+        cm.current?.hide();
+        if (window.confirm(`Delete custom action "${act.text}"?`)) deleteCustomAiAction(act.id);
+    };
+
+    const menuModel = useMemo(() => {
+        if (!selectedRow) return [];
+        const hide = () => cm.current?.hide();
+        const custom = customAiActions[selectedRow.label] || [];
+        const items = [
+            ...(selectedRow.label === "word" && !isSpecial(selectedRow.explanation)
+                ? [{label: isDesktop ? "Practice (Typing Trainer)" : "Practice (Spell Game)", icon: "pi pi-play", command: () => openGame(selectedRow)}]
+                : []),
+            ...custom.map(act => ({label: act.text, icon: "pi pi-arrow-right", command: () => openChatGPTUrl(queryFor(selectedRow, act.key)), onDelete: () => confirmDeleteAction(act)}))
+        ];
+        return withTouchTemplate(items.length ? items : [{label: "No actions available", icon: "pi pi-ban", disabled: true}], hide);
+    }, [selectedRow, customAiActions, isDesktop, aiQueries]);
 
     const quickButtonColor = name => labelColor(["word", "rule", "topic"].find(k => (name || "").toLowerCase().includes(k)));
 
@@ -369,17 +378,18 @@ export default function LearningTable() {
 
     const explanationBody = row => {
         const text = row.explanation || "";
-        if (isImageUrl(text)) return (
-            <img src={text.trim()} alt="Explanation" style={{maxWidth: 200, maxHeight: 100, cursor: "pointer", objectFit: "contain"}}
-                 onClick={() => {
-                     setImageError(false);
-                     setImage(text.trim());
-                 }}
-                 onError={e => {
-                     e.target.style.display = "none";
-                     e.target.parentNode.innerHTML = '<span style="color: red;">Image cannot be reached</span>';
-                 }}/>
-        );
+        if (isImageUrl(text)) {
+            const src = text.trim();
+            if (broken[src]) return <span style={{color: "red"}}>Image cannot be reached</span>;
+            return (
+                <img src={src} alt="Explanation" style={{maxWidth: 200, maxHeight: 100, cursor: "pointer", objectFit: "contain"}}
+                     onClick={() => {
+                         setImageError(false);
+                         setImage(src);
+                     }}
+                     onError={() => setBroken(b => ({...b, [src]: true}))}/>
+            );
+        }
         if (isHtmlContent(text)) {
             const color = labelColor(row.label, "#6b7280");
             return <Button label="Open Rule" size="small" onClick={() => setTableHtml(text)} style={{padding: "6px 12px", fontSize: "0.875rem", backgroundColor: color, borderColor: color, color: "#fff"}}/>;
@@ -398,14 +408,14 @@ export default function LearningTable() {
         <div style={{position: "relative"}}>
             <Dropdown value={o.value} options={opts} optionLabel="label" optionValue="value" placeholder={placeholder} onChange={e => o.filterApplyCallback(e.value)}
                       itemTemplate={op => <ColorChip color={op.color}>{op.label}</ColorChip>} style={{minWidth: 150}}/>
-            {o.value && <ClearIcon onClick={() => o.filterApplyCallback(null)} right="35px" color="#6c757d" size="0.9rem" char={TimesIcon}/>}
+            {o.value && <ClearIcon onClick={() => o.filterApplyCallback(null)} right="35px" color="#6c757d" size="0.9rem">{TimesIcon}</ClearIcon>}
         </div>
     );
 
     const textFilter = placeholder => o => (
         <div style={{position: "relative", width: "100%"}}>
             <InputText value={o.value || ""} onChange={e => o.filterApplyCallback(e.target.value)} placeholder={placeholder} style={{width: "100%"}}/>
-            {o.value && <ClearIcon onClick={() => o.filterApplyCallback("")} right="8px" color="#6c757d" char={TimesIcon}/>}
+            {o.value && <ClearIcon onClick={() => o.filterApplyCallback("")} right="8px" color="#6c757d">{TimesIcon}</ClearIcon>}
         </div>
     );
 
@@ -474,7 +484,7 @@ export default function LearningTable() {
                                 <div key={btn.id} style={{position: "relative", display: "inline-block"}}>
                                     <Button label={btn.name} style={{backgroundColor: bg, borderColor: bg, color: "#fff", paddingRight: "2rem"}}
                                             onClick={() => form.content.trim() ? openChatGPTUrl(`${form.content.trim()} - ${btn.query.trim()}`) : showToast("warn", "Missing Content", "Enter a word or phrase before using Quick Actions")}/>
-                                    <ClearIcon char="×" color="white" size="16px" weight="bold" onClick={() => window.confirm(`Delete button "${btn.name}"?`) && deleteQuickButton(btn.id)}/>
+                                    <ClearIcon color="white" size="16px" weight="bold" onClick={() => window.confirm(`Delete button "${btn.name}"?`) && deleteQuickButton(btn.id)}>×</ClearIcon>
                                 </div>
                             );
                         })}
@@ -502,7 +512,7 @@ export default function LearningTable() {
                                cm.current.show(e.originalEvent);
                            }}
                            selectionMode="multiple" selection={selectedRows} onSelectionChange={e => setSelectedRows(e.value)} metaKeySelection
-                           responsiveLayout="scroll" breakpoint="768px" style={{minWidth: 600}}>
+                           breakpoint="768px" style={{minWidth: 600}}>
                     <Column header="#" body={orderBody} style={{width: "3rem", textAlign: "center"}}/>
                     <Column field="statusLabel" header="Status" body={statusBody} sortable sortFunction={statusSort} {...FILTER_PROPS}
                             filterElement={dropdownFilter(toOpts(STATUS_LABELS), "Select color")} style={{minWidth: "10rem"}}/>
@@ -532,7 +542,7 @@ export default function LearningTable() {
             <Dialog header="Image Viewer" visible={!!image} style={{width: "80vw", maxWidth: 800}} onHide={() => setImage(null)} modal>
                 {imageError
                     ? <div style={{padding: "2rem", textAlign: "center", color: "red", fontSize: "1.1rem"}}>Image cannot be reached</div>
-                    : <img src={image} alt="Full size" style={{width: "100%", height: "auto", maxHeight: "70vh", objectFit: "contain"}} onError={() => setImageError(true)}/>}
+                    : <img src={image || ""} alt="Full size" style={{width: "100%", height: "auto", maxHeight: "70vh", objectFit: "contain"}} onError={() => setImageError(true)}/>}
             </Dialog>
 
             <Dialog header="Rule Viewer" visible={tableHtml !== null} style={{width: "90vw", maxWidth: 1200}} onHide={() => setTableHtml(null)} modal
