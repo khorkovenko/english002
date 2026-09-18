@@ -40,12 +40,12 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
 
     useEffect(() => {
         if (!visible) return;
-        const { overflow, position } = document.body.style;
-        document.body.style.overflow = "hidden";
-        document.body.style.position = "fixed";
+        const y = window.scrollY;
+        const { overflow, position, top, width } = document.body.style;
+        Object.assign(document.body.style, { overflow: "hidden", position: "fixed", top: `-${y}px`, width: "100%" });
         return () => {
-            document.body.style.overflow = overflow;
-            document.body.style.position = position;
+            Object.assign(document.body.style, { overflow, position, top, width });
+            window.scrollTo(0, y);
         };
     }, [visible]);
 
@@ -189,7 +189,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             onHide={onClose}
             onShow={() => requestAnimationFrame(() => {
                 drawCanvas();
-                canvasRef.current?.focus();
+                canvasRef.current?.focus({ preventScroll: true });
             })}
         >
             <canvas

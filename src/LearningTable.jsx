@@ -317,17 +317,8 @@ export default function LearningTable() {
     }, "Error updating row:", "Failed to update item");
 
     const queryFor = (row, key) => buildChatGPTQuery({content: row.content, explanation: row.explanation, queryTemplate: key ? aiQueries[row.label]?.[key] || null : null});
-    const scrollY = useRef(0);
-    const restoreScroll = () => requestAnimationFrame(() => window.scrollTo(0, scrollY.current));
-    const openGame = row => {
-        scrollY.current = window.scrollY;
-        setGame({...row, combinedText: `${row.content} - ${row.explanation}`});
-        restoreScroll();
-    };
-    const closeGame = () => {
-        setGame(null);
-        restoreScroll();
-    };
+    const openGame = row => setGame({...row, combinedText: `${row.content} - ${row.explanation}`});
+    const closeGame = () => setGame(null);
 
     const confirmDeleteAction = act => {
         cm.current?.hide();
