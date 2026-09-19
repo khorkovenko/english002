@@ -17,9 +17,9 @@ const TOP_PAD = 30;
 
 export const SpellGameModal = ({ spellText, visible, onClose }) => {
     const canvasRef = useRef(null);
-    const [drawing, setDrawing] = useState(false);
     const [paths, setPaths] = useState([]);
-    const [currentPath, setCurrentPath] = useState([]);
+    const drawingRef = useRef(false);
+    const currentPathRef = useRef([]);
     const [useFinger, setUseFinger] = useState(false);
     const [canvasWidth, setCanvasWidth] = useState(650);
     const [canvasHeight, setCanvasHeight] = useState(400);
@@ -37,17 +37,6 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         window.addEventListener("resize", updateCanvasSize);
         return () => window.removeEventListener("resize", updateCanvasSize);
     }, []);
-
-    useEffect(() => {
-        if (!visible) return;
-        const y = window.scrollY;
-        const { overflow, position, top, width } = document.body.style;
-        Object.assign(document.body.style, { overflow: "hidden", position: "fixed", top: `-${y}px`, width: "100%" });
-        return () => {
-            Object.assign(document.body.style, { overflow, position, top, width });
-            window.scrollTo(0, y);
-        };
-    }, [visible]);
 
     const layout = (ctx, width, draw) => {
         const startX = PAD + 5;
@@ -119,7 +108,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
         ctx.lineWidth = 4;
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
-        [...paths, currentPath].forEach(path => {
+        [...paths, currentPathRef.current].forEach(path => {
             if (!path.length) return;
             ctx.beginPath();
             path.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
@@ -129,7 +118,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
 
     useEffect(() => {
         drawCanvas();
-    }, [paths, currentPath, spellText, canvasWidth, canvasHeight, fontSpec]);
+    }, [paths, spellText, canvasWidth, canvasHeight, fontSpec]);
 
     useEffect(() => {
         document.fonts?.load(fontSpec).then(drawCanvas);
@@ -149,8 +138,29 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
     };
 
     const handleReset = () => {
+        drawingRef.current = false;
+        currentPathRef.current = [];
         setPaths([]);
-        setCurrentPath([]);
+    };
+
+    const drawSegment = (from, to) => {
+        const ctx = canvasRef.current.getContext("2d");
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 4;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+    };
+
+    const finishStroke = () => {
+        if (!drawingRef.current) return;
+        drawingRef.current = false;
+        const path = currentPathRef.current;
+        currentPathRef.current = [];
+        if (path.length) setPaths(p => [...p, path]);
     };
 
     const calculateAccuracy = () => {
@@ -182,6 +192,7 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
             header="Spell the word"
             visible={visible}
             modal
+            blockScroll
             closable={false}
             focusOnShow={false}
             style={{ width: "95vw", maxWidth: "700px" }}
@@ -201,26 +212,22 @@ export const SpellGameModal = ({ spellText, visible, onClose }) => {
                 onPointerDown={e => {
                     if (!useFinger && e.pointerType !== "pen") return;
                     e.preventDefault();
-                    setDrawing(true);
-                    setCurrentPath([getOffset(canvasRef.current, e.clientX, e.clientY)]);
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                    drawingRef.current = true;
+                    const pos = getOffset(e.currentTarget, e.clientX, e.clientY);
+                    currentPathRef.current = [pos];
+                    drawSegment(pos, pos);
                 }}
                 onPointerMove={e => {
-                    if (!drawing || (!useFinger && e.pointerType !== "pen")) return;
+                    if (!drawingRef.current || (!useFinger && e.pointerType !== "pen")) return;
                     e.preventDefault();
-                    const pos = getOffset(canvasRef.current, e.clientX, e.clientY);
-                    setCurrentPath(p => [...p, pos]);
+                    const path = currentPathRef.current;
+                    const pos = getOffset(e.currentTarget, e.clientX, e.clientY);
+                    drawSegment(path[path.length - 1], pos);
+                    path.push(pos);
                 }}
-                onPointerUp={e => {
-                    if (!drawing) return;
-                    e.preventDefault();
-                    setDrawing(false);
-                    setPaths(p => [...p, currentPath]);
-                    setCurrentPath([]);
-                }}
-                onPointerCancel={() => {
-                    setDrawing(false);
-                    setCurrentPath([]);
-                }}
+                onPointerUp={finishStroke}
+                onPointerCancel={finishStroke}
                 style={{
                     border: "2px solid #1976D2", borderRadius: "8px", cursor: "crosshair", marginBottom: "1rem",
                     touchAction: "none", userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none",
