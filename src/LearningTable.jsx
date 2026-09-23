@@ -364,7 +364,7 @@ export default function LearningTable() {
     };
 
     const contentBody = row => (
-        <div onClick={() => openChatGPTUrl(queryFor(row))} style={{cursor: "pointer", color: "#2196F3", textDecoration: "underline"}}>{row.content}</div>
+        <span onClick={() => openChatGPTUrl(queryFor(row))} style={{cursor: "pointer", color: "#2196F3", textDecoration: "underline"}}>{row.content}</span>
     );
 
     const explanationBody = row => {
