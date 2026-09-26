@@ -50,11 +50,12 @@ const CSS = `
         .p-button { padding: 0.4rem 0.6rem !important; font-size: 0.875rem !important; }
         .p-inputtext { font-size: 0.875rem !important; padding: 0.4rem !important; }
     }
-    @media (max-width: 480px) {
+        @media (max-width: 480px) {
         .p-datatable .p-datatable-thead > tr > th, .p-datatable .p-datatable-tbody > tr > td { padding: 0.3rem !important; font-size: 0.75rem !important; }
         .p-button { padding: 0.3rem 0.5rem !important; font-size: 0.75rem !important; }
         .p-inputtext { font-size: 0.75rem !important; padding: 0.3rem !important; }
     }
+    .p-button.quick-btn { padding-right: 2rem !important; }
     .p-datatable .p-row-editor-init, .p-datatable .p-row-editor-save, .p-datatable .p-row-editor-cancel {
         display: inline-flex !important; align-items: center !important; justify-content: center !important;
         width: 2.75rem !important; height: 2.75rem !important; border-radius: 50% !important;
@@ -473,8 +474,7 @@ export default function LearningTable() {
                             const bg = quickButtonColor(btn.name);
                             return (
                                 <div key={btn.id} style={{position: "relative", display: "inline-block"}}>
-                                    <Button label={btn.name} style={{backgroundColor: bg, borderColor: bg, color: "#fff", paddingRight: "2rem"}}
-                                            onClick={() => form.content.trim() ? openChatGPTUrl(`${form.content.trim()} - ${btn.query.trim()}`) : showToast("warn", "Missing Content", "Enter a word or phrase before using Quick Actions")}/>
+                                    <Button label={btn.name} className="quick-btn" style={{backgroundColor: bg, borderColor: bg, color: "#fff", paddingRight: "2rem"}}                                            onClick={() => form.content.trim() ? openChatGPTUrl(`${form.content.trim()} - ${btn.query.trim()}`) : showToast("warn", "Missing Content", "Enter a word or phrase before using Quick Actions")}/>
                                     <ClearIcon color="white" size="16px" weight="bold" onClick={() => window.confirm(`Delete button "${btn.name}"?`) && deleteQuickButton(btn.id)}>×</ClearIcon>
                                 </div>
                             );
